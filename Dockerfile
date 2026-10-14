@@ -10,7 +10,6 @@ FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
-# dist/server/migrations holds the SQL migrations: the build copies them there.
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./
 USER node

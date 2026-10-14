@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { isSceneName, parseScene, validateScene } from "./scene.js";
+import {
+  isAt,
+  isSceneName,
+  onBoard,
+  parseScene,
+  squareKey,
+  validateScene,
+} from "./scene.js";
 
 /** A small valid scene. Each test changes one part of it. */
 function scene() {
@@ -49,6 +56,34 @@ describe("isSceneName", () => {
     expect(isSceneName("Demo")).toBe(false);
     expect(isSceneName("../demo")).toBe(false);
     expect(isSceneName("demo.json")).toBe(false);
+  });
+});
+
+describe("isAt, onBoard and squareKey", () => {
+  it("takes two whole numbers only as [x, z]", () => {
+    expect(isAt([1, 2])).toBe(true);
+    expect(isAt([1, 2, 3])).toBe(false);
+    expect(isAt([1.5, 2])).toBe(false);
+    expect(isAt("1,2")).toBe(false);
+  });
+
+  it("takes only whole-number squares in the board", () => {
+    const size = { width: 3, depth: 2 };
+    expect(onBoard(size, { x: 0, z: 0 })).toBe(true);
+    expect(onBoard(size, { x: 2, z: 1 })).toBe(true);
+    for (const square of [
+      { x: -1, z: 0 },
+      { x: 3, z: 0 },
+      { x: 0, z: 2 },
+      { x: 0.5, z: 0 },
+    ]) {
+      expect(onBoard(size, square)).toBe(false);
+    }
+  });
+
+  it("gives one key for each square", () => {
+    expect(squareKey({ x: 1, z: 12 })).toBe("1,12");
+    expect(squareKey({ x: 11, z: 2 })).toBe("11,2");
   });
 });
 

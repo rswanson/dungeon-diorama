@@ -2,10 +2,22 @@ import { readFileSync } from "node:fs";
 import { expect, test as base, type Page } from "@playwright/test";
 import type { Diorama } from "../src/shared/diorama.js";
 import { findPath } from "../src/shared/path.js";
-import { parseScene } from "../src/shared/scene.js";
+import { parseScene, squareKey, type Scene } from "../src/shared/scene.js";
 import { CLICK_SLOP } from "../src/client/press.js";
 
 type Square = [number, number];
+
+/** The demo scene file. */
+function demoScene(): Scene {
+  const result = parseScene(
+    readFileSync(
+      new URL("../public/scenes/demo.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  if (!result.ok) throw new Error(result.problems.join("\n"));
+  return result.scene;
+}
 
 /** The fighter's square in the demo scene file, a free square, and the goblin's square. */
 const FIGHTER: Square = [7, 6];
@@ -176,32 +188,26 @@ test("a move that does not save puts the fighter back with a notice", async ({
     .toEqual(FIGHTER);
 });
 
-test("a move that the server refuses with 409 puts the fighter back and loads the positions again", async ({
+test("a move that the server refuses with 409 puts the fighter back and shows the layout of the 409", async ({
   page,
 }) => {
+  // Another tab moved the goblin onto the square that the fighter aims at.
+  // The 409 gives the layout on the server.
+  const positions = {
+    ...Object.fromEntries(demoScene().sprites.map((s) => [s.id, s.at])),
+    goblin: FREE,
+  };
   await page.route("**/api/scenes/*/sprites/*/position", (route) =>
     route.fulfill({
       status: 409,
-      json: { error: "Another sprite stands on that square." },
+      json: { error: "Another sprite stands on that square.", positions },
     }),
   );
-  // Another tab moved the goblin onto the square that the fighter aims at.
-  let reads = 0;
-  await page.route("**/api/scenes/*/positions", async (route) => {
-    reads++;
-    const res = await route.fetch();
-    const body = (await res.json()) as { positions: Record<string, Square> };
-    await route.fulfill({
-      response: res,
-      json: { positions: { ...body.positions, goblin: FREE } },
-    });
-  });
   const held = await grab(page, "fighter");
   await held.moveTo(FREE);
   await page.mouse.up();
   await expect(page.getByRole("status")).toHaveText("Move not saved");
   await expect.poll(() => hook(page, "spriteSquare", "goblin")).toEqual(FREE);
-  expect(reads).toBe(1);
   expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
 });
 
@@ -271,21 +277,16 @@ test("Esc during a drag puts the fighter back", async ({ page }) => {
 
 test("a drag shows the route and its feet until the drop", async ({ page }) => {
   // The route the demo scene file gives: around the other sprites.
-  const result = parseScene(
-    readFileSync(
-      new URL("../public/scenes/demo.json", import.meta.url),
-      "utf8",
-    ),
-  );
-  if (!result.ok) throw new Error(result.problems.join("\n"));
-  const { board, sprites } = result.scene;
+  const { board, sprites } = demoScene();
   const others = new Set(
-    sprites.filter((s) => s.id !== "wizard").map((s) => s.at.join(",")),
+    sprites
+      .filter((s) => s.id !== "wizard")
+      .map(({ at: [x, z] }) => squareKey({ x, z })),
   );
   /** The route the demo scene file gives from the wizard's square to `to`. */
   const routeTo = (to: Square) => {
     const route = findPath(
-      { ...board, blocked: (x, z) => others.has(`${x},${z}`) },
+      { ...board, blocked: (x, z) => others.has(squareKey({ x, z })) },
       { x: WIZARD[0], z: WIZARD[1] },
       { x: to[0], z: to[1] },
     );

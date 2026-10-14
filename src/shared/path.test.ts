@@ -7,12 +7,12 @@ import {
   STEP_FEET,
   type Grid,
 } from "./path.js";
-import type { Square } from "./scene.js";
+import { squareKey, type Square } from "./scene.js";
 
 /** A grid of this size with these squares blocked. */
 function grid(width: number, depth: number, blocked: Square[] = []): Grid {
-  const keys = new Set(blocked.map(({ x, z }) => `${x},${z}`));
-  return { width, depth, blocked: (x, z) => keys.has(`${x},${z}`) };
+  const keys = new Set(blocked.map(squareKey));
+  return { width, depth, blocked: (x, z) => keys.has(squareKey({ x, z })) };
 }
 
 const sq = (x: number, z: number): Square => ({ x, z });

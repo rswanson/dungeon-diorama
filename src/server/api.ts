@@ -1,12 +1,14 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type pg from "pg";
-import { isAt, mergePositions, onBoard, type At } from "../shared/positions.js";
-import { message } from "./db.js";
+import type { At, Layout } from "../shared/positions.js";
+import { isAt, onBoard } from "../shared/scene.js";
+import { message, withTransaction } from "./db.js";
+import { mergePositions } from "./positions.js";
 import { SceneFileError, type SceneFiles } from "./scenes.js";
 import { visitor, type VisitorEnv } from "./visitor.js";
 
-export interface ApiOptions {
+interface ApiOptions {
   db: pg.Pool;
   scenes: SceneFiles;
   /** Sets `Secure` on the visitor cookie. True in production. */
@@ -68,60 +70,61 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
       if (!at) {
         return c.json({ error: 'The body must be {"at": [x, z]}.' }, 400);
       }
-      if (!onBoard(scene.board, at)) {
+      if (!onBoard(scene.board, { x: at[0], z: at[1] })) {
         return c.json({ error: "The square is off the board." }, 400);
       }
 
       const visitorId = c.get("visitor");
-      const client = await db.connect();
-      try {
-        await client.query("BEGIN");
-        // One move at a time for each visitor and scene, so the check below
-        // sees each move that went before it.
-        await client.query("SELECT pg_advisory_xact_lock($1, hashtext($2))", [
-          MOVE_LOCK,
-          `${visitorId}/${name}`,
-        ]);
-        const saved = await savedRows(client, visitorId, name);
-        const layout = mergePositions(scene, saved);
-        const other = Object.entries(layout).find(
-          ([id, [x, z]]) => id !== spriteId && x === at[0] && z === at[1],
-        );
-        if (other) {
-          await client.query("ROLLBACK");
-          return c.json(
-            { error: "Another sprite stands on that square." },
-            409,
+      // The layout when another sprite stands on the square, else null.
+      const conflict = await withTransaction(
+        db,
+        async (client): Promise<Layout | null> => {
+          // One move at a time for each visitor and scene, so the check below
+          // sees each move that went before it.
+          await client.query("SELECT pg_advisory_xact_lock($1, hashtext($2))", [
+            MOVE_LOCK,
+            `${visitorId}/${name}`,
+          ]);
+          const saved = await savedRows(client, visitorId, name);
+          const layout = mergePositions(scene, saved);
+          const taken = Object.entries(layout).some(
+            ([id, [x, z]]) => id !== spriteId && x === at[0] && z === at[1],
           );
-        }
-        // A saved row that the merge ignores goes, so that its sprite does not
-        // jump to it when the square comes free later.
-        const ignored = Object.entries(saved)
-          .filter(([id, [x, z]]) => {
-            const now = layout[id];
-            return now !== undefined && (now[0] !== x || now[1] !== z);
-          })
-          .map(([id]) => id);
-        if (ignored.length > 0) {
+          if (taken) return layout;
+          // A saved row that the merge ignores goes, so that its sprite does
+          // not jump to it when the square comes free later.
+          const ignored = Object.entries(saved)
+            .filter(([id, [x, z]]) => {
+              const now = layout[id];
+              return now !== undefined && (now[0] !== x || now[1] !== z);
+            })
+            .map(([id]) => id);
+          if (ignored.length > 0) {
+            await client.query(
+              `DELETE FROM sprite_positions
+              WHERE visitor_id = $1 AND scene = $2 AND sprite_id = ANY($3)`,
+              [visitorId, name, ignored],
+            );
+          }
           await client.query(
-            `DELETE FROM sprite_positions
-            WHERE visitor_id = $1 AND scene = $2 AND sprite_id = ANY($3)`,
-            [visitorId, name, ignored],
+            `INSERT INTO sprite_positions (visitor_id, scene, sprite_id, x, z)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (visitor_id, scene, sprite_id)
+           DO UPDATE SET x = EXCLUDED.x, z = EXCLUDED.z, updated_at = now()`,
+            [visitorId, name, spriteId, at[0], at[1]],
           );
-        }
-        await client.query(
-          `INSERT INTO sprite_positions (visitor_id, scene, sprite_id, x, z)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (visitor_id, scene, sprite_id)
-         DO UPDATE SET x = EXCLUDED.x, z = EXCLUDED.z, updated_at = now()`,
-          [visitorId, name, spriteId, at[0], at[1]],
+          return null;
+        },
+      );
+      if (conflict) {
+        // The client shows this layout, so it needs no other read.
+        return c.json(
+          {
+            error: "Another sprite stands on that square.",
+            positions: conflict,
+          },
+          409,
         );
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK").catch(() => {});
-        throw error;
-      } finally {
-        client.release();
       }
       return c.json({ at });
     },

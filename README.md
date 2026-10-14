@@ -2,7 +2,7 @@
 
 Dungeon Diorama is a web RPG engine with a D&D 3.5e flavor. It shows a square-grid board of voxel columns in 3D, with characters as pixel-art sprites that stand on the squares. You move a character with click and drag. A JSON scene file and PNG images set the board and the sprites.
 
-The server keeps the moves of each visitor in Postgres. A cookie (`dd_visitor`) names the visitor, so a reload shows the board as that visitor left it.
+The server keeps the moves of each visitor in Postgres. A cookie (`dd_visitor`) names the visitor, so a reload shows the board as that visitor left it. The page saves one move at a time: until the server answers, a click does not pick up a character.
 
 ## Commands
 

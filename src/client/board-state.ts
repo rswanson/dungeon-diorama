@@ -1,4 +1,4 @@
-import type { Square } from "../shared/scene.js";
+import { onBoard, squareKey, type Square } from "../shared/scene.js";
 
 // Where each sprite stands. It has no DOM and no three.js, so a test can run it
 // in Node. The scene file gives the start layout.
@@ -12,8 +12,6 @@ interface BoardSize {
 /** The record of the square of each sprite. One sprite stands on each square at most. */
 export class BoardState {
   private readonly squares = new Map<string, Square>();
-  /** The squares that a sprite keeps until its move saves, by "x,z": the id of that sprite. */
-  private readonly holds = new Map<string, string>();
 
   constructor(
     private readonly size: BoardSize,
@@ -52,47 +50,19 @@ export class BoardState {
     return occupied;
   }
 
-  onBoard({ x, z }: Square): boolean {
-    return (
-      Number.isInteger(x) &&
-      Number.isInteger(z) &&
-      x >= 0 &&
-      x < this.size.width &&
-      z >= 0 &&
-      z < this.size.depth
-    );
+  onBoard(square: Square): boolean {
+    return onBoard(this.size, square);
   }
 
   /**
-   * True when the sprite can stand on `to`: the square is on the board, no
-   * other sprite stands on it, and no other sprite holds it. Its own square is
-   * true: a move there changes nothing.
+   * True when the sprite can stand on `to`: the square is on the board and no
+   * other sprite stands on it. Its own square is true: a move there changes
+   * nothing.
    */
   canMove(id: string, to: Square): boolean {
     if (!this.squares.has(id) || !this.onBoard(to)) return false;
     const other = this.occupant(to.x, to.z);
-    const holder = this.holds.get(`${to.x},${to.z}`);
-    return (other === null || other === id) && (holder ?? id) === id;
-  }
-
-  /**
-   * Keeps `square` for sprite `id`: no other sprite can move there until
-   * `release`. A sprite holds its start square while its move saves, so it
-   * can go back there when the save fails.
-   */
-  hold(id: string, square: Square): void {
-    this.holds.set(`${square.x},${square.z}`, id);
-  }
-
-  /** The id of the sprite that holds `square`, or undefined when no sprite does. */
-  heldBy(square: Square): string | undefined {
-    return this.holds.get(`${square.x},${square.z}`);
-  }
-
-  /** Ends the hold of sprite `id` on `square`. */
-  release(id: string, square: Square): void {
-    const key = `${square.x},${square.z}`;
-    if (this.holds.get(key) === id) this.holds.delete(key);
+    return other === null || other === id;
   }
 
   /**
@@ -110,7 +80,7 @@ export class BoardState {
     }
     const seen = new Set<string>();
     for (const [id, square] of next) {
-      const key = `${square.x},${square.z}`;
+      const key = squareKey(square);
       if (!this.onBoard(square) || seen.has(key)) {
         throw new Error(
           `The layout cannot put "${id}" on square [${square.x}, ${square.z}].`,

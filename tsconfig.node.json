@@ -10,6 +10,7 @@
   },
   "include": [
     "src/**/*.test.ts",
+    "src/server/test-fixtures.ts",
     "vite.config.ts",
     "scripts",
     "playwright.config.ts",

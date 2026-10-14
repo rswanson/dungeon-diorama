@@ -3,6 +3,7 @@ import { Box3, Object3D, Vector3, type Ray } from "three";
 import { describe, expect, it } from "vitest";
 import { spritePixels } from "../../scripts/sprites.js";
 import { isRoute } from "../shared/path.js";
+import type { Layout } from "../shared/positions.js";
 import {
   parseScene,
   type Board,
@@ -416,15 +417,18 @@ describe("SpriteDrag save", () => {
   /** Lets each promise that waits end. */
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+  /** What a save resolves with. */
+  type Saved = { ok: boolean; positions?: Layout };
+
   /** The hero on the stage, with a save that ends when the test says. */
   function pressHeroWithSave() {
     const calls: [string, Square][] = [];
-    let finish: (saved: boolean) => void = () => {};
+    let finish: (result: Saved) => void = () => {};
     const parts = pressHeroStage((id, to) => {
       calls.push([id, to]);
-      return new Promise<boolean>((resolve) => (finish = resolve));
+      return new Promise<Saved>((resolve) => (finish = resolve));
     });
-    return { ...parts, calls, finish: (saved: boolean) => finish(saved) };
+    return { ...parts, calls, finish: (result: Saved) => finish(result) };
   }
 
   /** The same stage and press as the SpriteDrag tests, with `save`. */
@@ -446,19 +450,27 @@ describe("SpriteDrag save", () => {
       const from = parts.screen(foot);
       return { x: to.x + at.x - from.x, y: to.y + at.y - from.y };
     };
-    /** A point on the middle of the hero as it stands now. */
-    const onHero = (): Point => {
-      const hero = parts.layer.get("hero");
-      if (!hero) throw new Error("No hero.");
+    /** A point on the middle of a sprite as it stands now. */
+    const onSprite = (id: string): Point => {
+      const sprite = parts.layer.get(id);
+      if (!sprite) throw new Error(`No sprite "${id}".`);
+      const { position } = sprite.mesh;
       return parts.screen(
-        hero.mesh.position.clone().setY(hero.mesh.position.y + hero.height / 2),
+        position.clone().setY(position.y + sprite.height / 2),
       );
     };
-    return { ...parts, at, grab, over, onHero };
+    return {
+      ...parts,
+      at,
+      grab,
+      over,
+      onHero: () => onSprite("hero"),
+      onRat: () => onSprite("rat"),
+    };
   }
 
-  it("saves a move to another square and holds the start square until the save ends", async () => {
-    const { drag, state, grab, at, over, rest, calls, finish, onHero } =
+  it("saves a move to another square, and takes no sprite until the save ends", async () => {
+    const { drag, state, grab, at, over, rest, calls, finish, onHero, onRat } =
       pressHeroWithSave();
     drag.start(grab, at);
     drag.drop(over(FREE));
@@ -467,16 +479,16 @@ describe("SpriteDrag save", () => {
     expect(state.squareOf("hero")).toEqual(FREE);
     rest();
     expect(drag.busy()).toBe(true);
-    // No other sprite can take the start square, and the hero cannot be taken.
-    expect(state.canMove("rat", HERO)).toBe(false);
+    // While the move saves, a press takes neither the hero nor another sprite.
     expect(drag.grab(onHero())).toBeNull();
+    expect(drag.grab(onRat())).toBeNull();
 
-    finish(true);
+    finish({ ok: true });
     await flush();
     expect(drag.busy()).toBe(false);
     expect(state.squareOf("hero")).toEqual(FREE);
-    expect(state.canMove("rat", HERO)).toBe(true);
     expect(drag.grab(onHero())?.id).toBe("hero");
+    expect(drag.grab(onRat())?.id).toBe("rat");
   });
 
   it("puts the sprite back on its start square when the save fails", async () => {
@@ -485,13 +497,29 @@ describe("SpriteDrag save", () => {
     drag.start(grab, at);
     drag.drop(over(FREE));
     rest();
-    finish(false);
+    finish({ ok: false });
     await flush();
     expect(state.squareOf("hero")).toEqual(HERO);
     expect(drag.busy()).toBe(true);
     rest();
     expect(drag.busy()).toBe(false);
     expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, HERO));
+  });
+
+  it("shows the positions that a failed save gives, after the sprite goes back", async () => {
+    const { drag, state, layer, grab, at, over, rest, finish } =
+      pressHeroWithSave();
+    drag.start(grab, at);
+    drag.drop(over(FREE));
+    rest();
+    // Another tab moved the rat to the square that the hero aimed at.
+    finish({ ok: false, positions: { hero: [1, 1], rat: [0, 0] } });
+    await flush();
+    expect(state.squareOf("hero")).toEqual(HERO);
+    expect(state.squareOf("rat")).toEqual(FREE);
+    expect(drag.busy()).toBe(false);
+    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, HERO));
+    expect(layer.get("rat")?.mesh.position).toEqual(standPoint(BOARD, FREE));
   });
 
   it("puts the sprite back when the save throws", async () => {
@@ -533,51 +561,6 @@ describe("SpriteDrag save", () => {
     expect(state.squareOf("rat")).toEqual(HERO);
     expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, RAT));
     expect(layer.get("rat")?.mesh.position).toEqual(standPoint(BOARD, HERO));
-  });
-
-  it("leaves a sprite whose move still saves on its square in a new layout", async () => {
-    const { drag, state, layer, grab, at, over, rest, finish } =
-      pressHeroWithSave();
-    drag.start(grab, at);
-    drag.drop(over(FREE));
-    rest();
-    // The server layout puts the hero on [2, 0] and the rat on [1, 2].
-    drag.relayout({ hero: [2, 0], rat: [1, 2] });
-    expect(state.squareOf("hero")).toEqual(FREE);
-    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, FREE));
-    expect(state.squareOf("rat")).toEqual({ x: 1, z: 2 });
-    expect(layer.get("rat")?.mesh.position).toEqual(
-      standPoint(BOARD, { x: 1, z: 2 }),
-    );
-    // The save ends: the hero stays where it is.
-    finish(true);
-    await flush();
-    expect(state.squareOf("hero")).toEqual(FREE);
-  });
-
-  it("does not put a sprite on a square that is held for a move that still saves", async () => {
-    const { drag, state, layer, grab, at, over, rest, finish } =
-      pressHeroWithSave();
-    drag.start(grab, at);
-    drag.drop(over(FREE));
-    rest();
-    // The hero holds [1, 1] until its save ends. The layout puts the rat there.
-    expect(state.canMove("rat", HERO)).toBe(false);
-    drag.relayout({ hero: [0, 0], rat: [1, 1] });
-    expect(state.squareOf("rat")).toEqual(RAT);
-    expect(layer.get("rat")?.mesh.position).toEqual(standPoint(BOARD, RAT));
-    expect(state.squareOf("hero")).toEqual(FREE);
-
-    // A save that fails sends the hero back, and no sprite shares its square.
-    finish(false);
-    await flush();
-    rest();
-    expect(state.squareOf("hero")).toEqual(HERO);
-    expect(state.squareOf("rat")).toEqual(RAT);
-    // With no move that saves, the same layout applies in full.
-    drag.relayout({ hero: [0, 0], rat: [1, 1] });
-    expect(state.squareOf("hero")).toEqual(FREE);
-    expect(state.squareOf("rat")).toEqual(HERO);
   });
 });
 

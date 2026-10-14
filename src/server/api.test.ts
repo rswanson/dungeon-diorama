@@ -7,6 +7,7 @@ import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { createPool, migrate } from "./db.js";
+import { LAYOUT, SCENE } from "./test-fixtures.js";
 import { VISITOR_COOKIE, VISITOR_MAX_AGE } from "./visitor.js";
 
 // These tests need a real Postgres: `npm run db:up`, then set
@@ -21,25 +22,6 @@ if (!url) {
     "The API tests do not run: TEST_DATABASE_URL is not set. Run `npm run db:up` and set it (see .env.example).",
   );
 }
-
-// Three squares by three. The scene puts a on [0, 0], b on [1, 0] and c on [2, 2].
-const SCENE = {
-  version: 1,
-  name: "Test",
-  board: {
-    width: 3,
-    depth: 3,
-    materials: { s: { name: "stone", top: "#888888", side: "#666666" } },
-    heights: ["000", "000", "000"],
-    tiles: ["sss", "sss", "sss"],
-  },
-  sprites: [
-    { id: "a", name: "A", image: "a.png", at: [0, 0] },
-    { id: "b", name: "B", image: "b.png", at: [1, 0] },
-    { id: "c", name: "C", image: "c.png", at: [2, 2] },
-  ],
-};
-const LAYOUT = { a: [0, 0], b: [1, 0], c: [2, 2] };
 
 describe.skipIf(!url)("the positions API on Postgres", () => {
   const schema = `test_${randomUUID().replaceAll("-", "")}`;
@@ -182,16 +164,25 @@ describe.skipIf(!url)("the positions API on Postgres", () => {
     expect((await put(me, "orc", { at: [1, 1] })).status).toBe(404);
   });
 
-  it("answers 409 for a square that another sprite of this visitor holds", async () => {
+  it("answers 409 with the layout for a square that another sprite of this visitor holds", async () => {
     const me = visitor();
     // b stands on [1, 0] in the scene file.
-    expect((await put(me, "a", { at: [1, 0] })).status).toBe(409);
+    const refused = await put(me, "a", { at: [1, 0] });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({
+      error: "Another sprite stands on that square.",
+      positions: LAYOUT,
+    });
     // Another visitor's sprites do not block.
     const other = visitor();
     expect((await put(other, "c", { at: [1, 1] })).status).toBe(200);
     expect((await put(me, "a", { at: [1, 1] })).status).toBe(200);
-    // A saved move blocks too, and the square it left comes free.
-    expect((await put(me, "b", { at: [1, 1] })).status).toBe(409);
+    // A saved move blocks too, and the 409 gives it. The square it left comes free.
+    const blocked = await put(me, "b", { at: [1, 1] });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({
+      positions: { ...LAYOUT, a: [1, 1] },
+    });
     expect((await put(me, "b", { at: [0, 0] })).status).toBe(200);
   });
 

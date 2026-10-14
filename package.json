@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "concurrently --kill-others --names server,client \"tsx watch src/server/index.ts\" \"vite\"",
-    "build": "vite build && tsc -p tsconfig.server.json && cp -R src/server/migrations dist/server/",
+    "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.node.json",
     "lint": "eslint .",

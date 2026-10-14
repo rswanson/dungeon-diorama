@@ -34,12 +34,8 @@ export default defineConfig({
   webServer: {
     command: "node dist/server/index.js",
     url: `${BASE}/healthz`,
-    // The database of `npm run db:up`, unless DATABASE_URL names another one (CI).
-    env: {
-      PORT: String(PORT),
-      DATABASE_URL:
-        process.env.DATABASE_URL || "postgres://dd:dd@localhost:54329/dd",
-    },
+    // Without DATABASE_URL (CI sets it), the server uses the `npm run db:up` database.
+    env: { PORT: String(PORT) },
     reuseExistingServer: !process.env.CI,
   },
 });

@@ -9,7 +9,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { mergePositions, type Layout } from "../shared/positions.js";
+import type { Layout } from "../shared/positions.js";
 import {
   isSceneName,
   parseScene,
@@ -185,18 +185,12 @@ function showBoard(
     label: pathLabel,
     scene,
     requestDraw,
+    // On a 409, another tab moved a sprite there. The result then gives the
+    // positions on the server, and the drag shows them.
     async save(id, to) {
       const result = await savePosition(name, id, to);
-      if (result === "saved") return true;
-      showNotice("Move not saved");
-      // Another tab moved a sprite there: show the positions that the server has.
-      if (result === "conflict") {
-        void loadPositions(name).then(
-          (positions) => drag.relayout(mergePositions(file, positions)),
-          () => {},
-        );
-      }
-      return false;
+      if (!result.ok) showNotice("Move not saved");
+      return result;
     },
   });
 
@@ -217,14 +211,19 @@ function showBoard(
 
   draw();
 
-  // This visitor's positions, on top of the scene file. When they do not
-  // load, the board keeps the scene file layout.
+  // This visitor's positions, which the server merged with the scene file.
+  // When they do not load, or do not fit the board, the board keeps the scene
+  // file layout.
   const layout = saved.then((positions) => {
-    if (positions) {
-      state.place(mergePositions(file, positions));
-    } else {
-      showNotice("Saved moves did not load");
+    try {
+      if (positions) {
+        state.place(positions);
+        return;
+      }
+    } catch (error) {
+      console.warn("The saved moves do not fit the board:", error);
     }
+    showNotice("Saved moves did not load");
   });
 
   // The board shows first. Each sprite stands on it when its image and the

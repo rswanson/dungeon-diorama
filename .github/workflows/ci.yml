@@ -53,6 +53,10 @@ jobs:
           path: test-results/
           retention-days: 7
       - run: docker build -t dungeon-diorama:ci .
+      # The server tries the database for about 10 seconds, then exits. It
+      # starts first, so that time and the smoke test overlap.
+      - name: Start a container that cannot reach the database
+        run: docker run -d --name dd-nodb -e DATABASE_URL=postgres://dd:dd@127.0.0.1:1/dd dungeon-diorama:ci
       - name: Smoke test the container
         run: |
           set -euo pipefail
@@ -65,14 +69,8 @@ jobs:
           docker stop dd
           test "$(docker inspect -f '{{.State.ExitCode}}' dd)" = 0
       - name: Check that the server exits when it cannot reach the database
-        run: |
-          set -uo pipefail
-          # GitHub runs this step with `bash -e`. The command is expected to fail,
-          # so keep its exit code and compare it with 1 below.
-          code=0
-          docker run --name dd-nodb -e DATABASE_URL=postgres://dd:dd@127.0.0.1:1/dd dungeon-diorama:ci || code=$?
-          test "$code" = 1
-          test "$(docker inspect -f '{{.State.ExitCode}}' dd-nodb)" = 1
+        # `docker wait` waits for the exit and prints the exit code.
+        run: test "$(docker wait dd-nodb)" = 1
       - name: Show the container logs
         if: failure()
         run: |

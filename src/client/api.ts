@@ -4,12 +4,16 @@ import type { Square } from "../shared/scene.js";
 // The positions API of the server. The browser sends the visitor cookie
 // (`dd_visitor`) with each call, as the calls go to the same origin.
 
-/** How a save ends: it saved, another sprite stands there (409), or it failed. */
-export type SaveResult = "saved" | "conflict" | "failed";
+/**
+ * How a save ends: it saved, or it did not. A 409 (another sprite stands
+ * there) gives the visitor's positions on the server.
+ */
+type SaveResult = { ok: true } | { ok: false; positions?: Layout };
 
 /**
  * This visitor's positions in `scene`: the square of each sprite, with the
- * saved moves on top of the scene file. It throws when they do not load.
+ * saved moves on top of the scene file. The server merges them, so the board
+ * shows them as they are. It throws when they do not load.
  */
 export async function loadPositions(scene: string): Promise<Layout> {
   const res = await fetch(
@@ -43,9 +47,14 @@ export async function savePosition(
         body: JSON.stringify({ at: [to.x, to.z] }),
       },
     );
-    if (res.ok) return "saved";
-    return res.status === 409 ? "conflict" : "failed";
+    if (res.ok) return { ok: true };
+    if (res.status !== 409) return { ok: false };
+    const body = (await res.json()) as { positions?: unknown };
+    return {
+      ok: false,
+      positions: parsePositions(body.positions) ?? undefined,
+    };
   } catch {
-    return "failed";
+    return { ok: false };
   }
 }

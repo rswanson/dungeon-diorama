@@ -68,20 +68,6 @@ describe("BoardState", () => {
     expect(state().canMove("nobody", { x: 1, z: 1 })).toBe(false);
   });
 
-  it("keeps a held square for its sprite until the release", () => {
-    const board = state();
-    board.move("fighter", { x: 1, z: 1 });
-    board.hold("fighter", { x: 0, z: 0 });
-    expect(board.occupant(0, 0)).toBeNull();
-    expect(board.canMove("goblin", { x: 0, z: 0 })).toBe(false);
-    expect(board.canMove("fighter", { x: 0, z: 0 })).toBe(true);
-    // Only the sprite that holds the square can release it.
-    board.release("goblin", { x: 0, z: 0 });
-    expect(board.canMove("goblin", { x: 0, z: 0 })).toBe(false);
-    board.release("fighter", { x: 0, z: 0 });
-    expect(board.canMove("goblin", { x: 0, z: 0 })).toBe(true);
-  });
-
   it("places a whole layout at once, and refuses one with a clash", () => {
     const board = state();
     // The fighter takes the goblin's square as the goblin leaves it.
