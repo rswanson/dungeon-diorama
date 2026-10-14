@@ -84,6 +84,11 @@ export class BoardState {
     this.holds.set(`${square.x},${square.z}`, id);
   }
 
+  /** The id of the sprite that holds `square`, or undefined when no sprite does. */
+  heldBy(square: Square): string | undefined {
+    return this.holds.get(`${square.x},${square.z}`);
+  }
+
   /** Ends the hold of sprite `id` on `square`. */
   release(id: string, square: Square): void {
     const key = `${square.x},${square.z}`;

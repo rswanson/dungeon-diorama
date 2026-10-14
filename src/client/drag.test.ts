@@ -534,6 +534,51 @@ describe("SpriteDrag save", () => {
     expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, RAT));
     expect(layer.get("rat")?.mesh.position).toEqual(standPoint(BOARD, HERO));
   });
+
+  it("leaves a sprite whose move still saves on its square in a new layout", async () => {
+    const { drag, state, layer, grab, at, over, rest, finish } =
+      pressHeroWithSave();
+    drag.start(grab, at);
+    drag.drop(over(FREE));
+    rest();
+    // The server layout puts the hero on [2, 0] and the rat on [1, 2].
+    drag.relayout({ hero: [2, 0], rat: [1, 2] });
+    expect(state.squareOf("hero")).toEqual(FREE);
+    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, FREE));
+    expect(state.squareOf("rat")).toEqual({ x: 1, z: 2 });
+    expect(layer.get("rat")?.mesh.position).toEqual(
+      standPoint(BOARD, { x: 1, z: 2 }),
+    );
+    // The save ends: the hero stays where it is.
+    finish(true);
+    await flush();
+    expect(state.squareOf("hero")).toEqual(FREE);
+  });
+
+  it("does not put a sprite on a square that is held for a move that still saves", async () => {
+    const { drag, state, layer, grab, at, over, rest, finish } =
+      pressHeroWithSave();
+    drag.start(grab, at);
+    drag.drop(over(FREE));
+    rest();
+    // The hero holds [1, 1] until its save ends. The layout puts the rat there.
+    expect(state.canMove("rat", HERO)).toBe(false);
+    drag.relayout({ hero: [0, 0], rat: [1, 1] });
+    expect(state.squareOf("rat")).toEqual(RAT);
+    expect(layer.get("rat")?.mesh.position).toEqual(standPoint(BOARD, RAT));
+    expect(state.squareOf("hero")).toEqual(FREE);
+
+    // A save that fails sends the hero back, and no sprite shares its square.
+    finish(false);
+    await flush();
+    rest();
+    expect(state.squareOf("hero")).toEqual(HERO);
+    expect(state.squareOf("rat")).toEqual(RAT);
+    // With no move that saves, the same layout applies in full.
+    drag.relayout({ hero: [0, 0], rat: [1, 1] });
+    expect(state.squareOf("hero")).toEqual(FREE);
+    expect(state.squareOf("rat")).toEqual(HERO);
+  });
 });
 
 // Four squares by four, flat. The hero is on [3, 3]. The corner [0, 0] is free,

@@ -67,7 +67,11 @@ jobs:
       - name: Check that the server exits when it cannot reach the database
         run: |
           set -uo pipefail
-          docker run --name dd-nodb -e DATABASE_URL=postgres://dd:dd@127.0.0.1:1/dd dungeon-diorama:ci
+          # GitHub runs this step with `bash -e`. The command is expected to fail,
+          # so keep its exit code and compare it with 1 below.
+          code=0
+          docker run --name dd-nodb -e DATABASE_URL=postgres://dd:dd@127.0.0.1:1/dd dungeon-diorama:ci || code=$?
+          test "$code" = 1
           test "$(docker inspect -f '{{.State.ExitCode}}' dd-nodb)" = 1
       - name: Show the container logs
         if: failure()

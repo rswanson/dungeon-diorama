@@ -36,7 +36,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 - Put a package that the server uses at runtime in `dependencies`. Put all other packages in `devDependencies`. Vite bundles the client packages (for example `three`), so they are dev packages.
 - The server code uses Node ESM. A relative import in `src/server/` or `src/shared/` must end in `.js`.
 - The server reads `PORT` (default 3000) and listens on `0.0.0.0`.
-- The server reads `DATABASE_URL`. At the start, it waits up to about 10 seconds for the database, applies the migrations, and exits with code 1 when it cannot. In dev, without `DATABASE_URL`, it uses the `npm run db:up` database. `/healthz` answers 503 when the database does not answer.
+- The server reads `DATABASE_URL`. At the start, it tries 10 times to reach the database, 1 second apart, applies the migrations, and exits with code 1 when it cannot. A refused connection fails at once, so the server exits after about 10 seconds. A host that does not answer costs 5 seconds for each try (the connect timeout), so the server can take up to about 60 seconds to exit. In dev, without `DATABASE_URL`, it uses the `npm run db:up` database. `/healthz` answers 503 when the database does not answer.
 - The server sets the `dd_visitor` cookie on each `/api` request that has none. `NODE_ENV=production` makes it `Secure`.
 - `src/shared/positions.ts` (`mergePositions`) puts the saved rows on top of the scene file. The server and the client both use it, so they see one layout.
 - The API tests (`src/server/api.test.ts`) run only when `TEST_DATABASE_URL` is set. CI sets it. Each run makes a schema of its own and drops it.

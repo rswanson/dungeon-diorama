@@ -348,14 +348,38 @@ export class SpriteDrag {
   /**
    * Puts each sprite on its square in `layout` at once, for example the
    * positions that the server gives after a save failed. A drag that runs
-   * ends first, as a cancel does.
+   * ends first, as a cancel does. A sprite keeps its square when:
+   *
+   * - its move still saves,
+   * - its square in `layout` is held for a move that still saves,
+   * - its square in `layout` is the square of a sprite that keeps its square.
    */
   relayout(layout: Readonly<Record<string, readonly [number, number]>>): void {
     const { board, sprites, state } = this.parts;
     this.cancel();
     this.finishSettle();
-    state.place(layout);
-    for (const id of Object.keys(layout)) {
+    const keep = new Set<string>(this.saving);
+    for (let changed = true; changed;) {
+      changed = false;
+      const kept = new Set<string>();
+      for (const id of keep) {
+        const square = state.squareOf(id);
+        if (square) kept.add(`${square.x},${square.z}`);
+      }
+      for (const [id, [x, z]] of Object.entries(layout)) {
+        if (keep.has(id)) continue;
+        const holder = state.heldBy({ x, z });
+        if ((holder !== undefined && holder !== id) || kept.has(`${x},${z}`)) {
+          keep.add(id);
+          changed = true;
+        }
+      }
+    }
+    const next = Object.fromEntries(
+      Object.entries(layout).filter(([id]) => !keep.has(id)),
+    );
+    state.place(next);
+    for (const id of Object.keys(next)) {
       const sprite = sprites.get(id);
       const square = state.squareOf(id);
       if (!sprite || !square) continue;

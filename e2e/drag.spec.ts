@@ -176,6 +176,35 @@ test("a move that does not save puts the fighter back with a notice", async ({
     .toEqual(FIGHTER);
 });
 
+test("a move that the server refuses with 409 puts the fighter back and loads the positions again", async ({
+  page,
+}) => {
+  await page.route("**/api/scenes/*/sprites/*/position", (route) =>
+    route.fulfill({
+      status: 409,
+      json: { error: "Another sprite stands on that square." },
+    }),
+  );
+  // Another tab moved the goblin onto the square that the fighter aims at.
+  let reads = 0;
+  await page.route("**/api/scenes/*/positions", async (route) => {
+    reads++;
+    const res = await route.fetch();
+    const body = (await res.json()) as { positions: Record<string, Square> };
+    await route.fulfill({
+      response: res,
+      json: { positions: { ...body.positions, goblin: FREE } },
+    });
+  });
+  const held = await grab(page, "fighter");
+  await held.moveTo(FREE);
+  await page.mouse.up();
+  await expect(page.getByRole("status")).toHaveText("Move not saved");
+  await expect.poll(() => hook(page, "spriteSquare", "goblin")).toEqual(FREE);
+  expect(reads).toBe(1);
+  expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
+});
+
 test("the scene file layout shows when the saved moves do not load", async ({
   page,
 }) => {

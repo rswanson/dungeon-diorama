@@ -195,6 +195,45 @@ describe.skipIf(!url)("the positions API on Postgres", () => {
     expect((await put(me, "b", { at: [0, 0] })).status).toBe(200);
   });
 
+  it("answers 413 for a body of more than 1 KB, and saves nothing", async () => {
+    const me = visitor();
+    const big = JSON.stringify({ at: [1, 1], pad: "x".repeat(2000) });
+    const res = await put(me, "a", big);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "The body is too large." });
+    expect(await (await positions(me)).json()).toEqual({ positions: LAYOUT });
+    // A body of the normal size still saves.
+    expect((await put(me, "a", { at: [1, 1] })).status).toBe(200);
+  });
+
+  it("deletes a saved row that the merge ignores, so its sprite does not jump later", async () => {
+    const me = visitor();
+    const id = me.slice(VISITOR_COOKIE.length + 1);
+    // A saved row for c on [1, 0], where b stands in the scene file. The merge
+    // ignores it, so c stays on its scene square [2, 2].
+    await db.query(
+      `INSERT INTO sprite_positions (visitor_id, scene, sprite_id, x, z)
+       VALUES ($1, 'test', 'c', 1, 0)`,
+      [id],
+    );
+    expect(await (await positions(me)).json()).toEqual({ positions: LAYOUT });
+
+    // A later move of another sprite deletes the ignored row.
+    expect((await put(me, "a", { at: [1, 1] })).status).toBe(200);
+    const { rows } = await db.query(
+      `SELECT sprite_id FROM sprite_positions
+        WHERE visitor_id = $1 AND scene = 'test' ORDER BY sprite_id`,
+      [id],
+    );
+    expect(rows).toEqual([{ sprite_id: "a" }]);
+
+    // The square comes free. Without the delete, c would jump onto it.
+    expect((await put(me, "b", { at: [0, 2] })).status).toBe(200);
+    expect(await (await positions(me)).json()).toEqual({
+      positions: { a: [1, 1], b: [0, 2], c: [2, 2] },
+    });
+  });
+
   it("gives one 409 for two moves at once onto one square", async () => {
     for (let round = 0; round < 5; round++) {
       const me = visitor();
