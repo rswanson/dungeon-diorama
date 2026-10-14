@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "name": "Goblin Warren",
+  "board": {
+    "width": 16,
+    "depth": 12,
+    "materials": {
+      "s": { "name": "stone", "top": "#8e8a82", "side": "#66615a" },
+      "g": { "name": "grass", "top": "#6f8f4c", "side": "#6a5238" },
+      "d": { "name": "dirt", "top": "#9b7b57", "side": "#735a40" },
+      "w": { "name": "water", "top": "#4f7d96", "side": "#3d6072" }
+    },
+    "heights": [
+      "9999998766433443",
+      "9666666655323432",
+      "9666666554322332",
+      "8555555443221222",
+      "7444443322111122",
+      "6332222111111111",
+      "5111111111111211",
+      "4111111111111121",
+      "3100001111111112",
+      "2100001111111111",
+      "2110001111111111",
+      "2111111111111111"
+    ],
+    "tiles": [
+      "sssssssssssggggg",
+      "sssssssssssggggg",
+      "sssssssssssdgggg",
+      "ssssssssssddgggg",
+      "ssssssssdddggggg",
+      "sssssssdddgggggg",
+      "ssssssssddgggggg",
+      "ssddddssddgggggg",
+      "sdwwwwdsddgggggg",
+      "sdwwwwdsdddggggg",
+      "gddwwwdgggddgggg",
+      "ggggggggggggddgg"
+    ]
+  },
+  "sprites": [
+    {
+      "id": "fighter",
+      "name": "Aldric the Fighter",
+      "image": "sprites/fighter.png",
+      "at": [7, 6]
+    },
+    {
+      "id": "wizard",
+      "name": "Mirelle the Wizard",
+      "image": "sprites/wizard.png",
+      "at": [3, 2]
+    },
+    {
+      "id": "rogue",
+      "name": "Vex the Rogue",
+      "image": "sprites/rogue.png",
+      "at": [9, 8]
+    },
+    {
+      "id": "cleric",
+      "name": "Brother Oswin the Cleric",
+      "image": "sprites/cleric.png",
+      "at": [6, 9]
+    },
+    {
+      "id": "goblin",
+      "name": "Snik the Goblin",
+      "image": "sprites/goblin.png",
+      "at": [12, 4]
+    },
+    {
+      "id": "orc",
+      "name": "Grukk the Orc",
+      "image": "sprites/orc.png",
+      "at": [13, 7]
+    }
+  ]
+}
