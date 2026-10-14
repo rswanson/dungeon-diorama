@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   dragRoute,
   findPath,
+  isRoute,
   routeLabel,
   STEP_FEET,
   type Grid,
-  type Square,
 } from "./path.js";
+import type { Square } from "./scene.js";
 
 /** A grid of this size with these squares blocked. */
 function grid(width: number, depth: number, blocked: Square[] = []): Grid {
@@ -191,7 +192,7 @@ describe("findPath", () => {
   });
 });
 
-describe("dragRoute and routeLabel", () => {
+describe("dragRoute, isRoute and routeLabel", () => {
   const ring = [sq(3, 0), sq(3, 1), sq(4, 1)];
   const g = grid(5, 3, [sq(1, 1), ...ring]);
   const from = sq(0, 0);
@@ -199,19 +200,22 @@ describe("dragRoute and routeLabel", () => {
   it("shows the route and its feet for a free square it can reach", () => {
     const route = dragRoute(g, from, sq(2, 2));
     expect(route).toEqual(findPath(g, from, sq(2, 2)));
+    expect(isRoute(route)).toBe(true);
     expect(routeLabel(route)).toBe("15 ft");
   });
 
   it("says No path for a free square it cannot reach", () => {
     const route = dragRoute(g, from, sq(4, 0));
     expect(route).toBe("none");
+    expect(isRoute(route)).toBe(false);
     expect(routeLabel(route)).toBe("No path");
   });
 
   it("shows nothing for an occupied square, the start square or off the board", () => {
-    for (const to of [sq(1, 1), from, null]) {
+    for (const to of [sq(1, 1), from, null, sq(5, 0), sq(0.5, 0)]) {
       expect(dragRoute(g, from, to)).toBeNull();
     }
+    expect(isRoute(null)).toBe(false);
     expect(routeLabel(null)).toBeNull();
   });
 });

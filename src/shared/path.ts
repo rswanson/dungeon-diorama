@@ -1,11 +1,6 @@
 // The route of a move on the board, by the 3.5e rules. It has no DOM and no
 // three.js, so the client, the server and the tests can all use it.
-
-/** A square of the board, by its column and its row. */
-export interface Square {
-  x: number;
-  z: number;
-}
+import type { Square } from "./scene.js";
 
 /**
  * The squares that a route can use: the size of the board and the squares
@@ -30,6 +25,11 @@ export interface Route {
  * free target, or null when it shows nothing.
  */
 export type DragRoute = Route | "none" | null;
+
+/** True when a drag shows a route, not "none" and not null. */
+export function isRoute(route: DragRoute): route is Route {
+  return route !== null && route !== "none";
+}
 
 /** A straight step is 5 ft. A diagonal step is 5 ft, then 10 ft, then 5 ft, and so on. */
 export const STEP_FEET = 5;
@@ -67,10 +67,10 @@ export function findPath(grid: Grid, from: Square, to: Square): Route | null {
   if (from.x === to.x && from.z === to.z) {
     return { squares: [{ x: from.x, z: from.z }], feet: 0 };
   }
-  const { width } = grid;
+  const { width, depth } = grid;
   // State s is square (x, z) with the odd/even count of diagonal steps:
   // s = (z * width + x) * 2 + odd.
-  const count = width * grid.depth * 2;
+  const count = width * depth * 2;
   const feet = new Float64Array(count).fill(Infinity);
   const steps = new Int32Array(count);
   const before = new Int32Array(count).fill(-1);
@@ -93,7 +93,8 @@ export function findPath(grid: Grid, from: Square, to: Square): Route | null {
     for (const [dx, dz] of STEPS) {
       const nx = x + dx;
       const nz = z + dz;
-      if (!inside(grid, { x: nx, z: nz }) || grid.blocked(nx, nz)) continue;
+      if (nx < 0 || nx >= width || nz < 0 || nz >= depth) continue;
+      if (grid.blocked(nx, nz)) continue;
       const diagonal = dx !== 0 && dz !== 0;
       const cost = diagonal && odd ? 2 * STEP_FEET : STEP_FEET;
       const t = (nz * width + nx) * 2 + (diagonal ? odd ^ 1 : odd);
@@ -130,10 +131,11 @@ export function dragRoute(
 
 /** The words of the label of a drag route: "30 ft", "No path", or null for no label. */
 export function routeLabel(route: DragRoute): string | null {
-  if (route === null) return null;
-  return route === "none" ? "No path" : `${route.feet} ft`;
+  if (isRoute(route)) return `${route.feet} ft`;
+  return route === "none" ? "No path" : null;
 }
 
+/** True when `square` is a whole-number square on the board. The input can come from outside. */
 function inside(grid: Grid, { x, z }: Square): boolean {
   return (
     Number.isInteger(x) &&

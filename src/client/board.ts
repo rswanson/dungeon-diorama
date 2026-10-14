@@ -6,8 +6,7 @@ import {
   MeshStandardMaterial,
   Vector3,
 } from "three";
-import type { Board } from "../shared/scene.js";
-import type { Square } from "./picking.js";
+import type { Board, Square } from "../shared/scene.js";
 
 // Board units: one square is one unit wide. Square [x, z] covers x to x + 1
 // and z to z + 1. The base of the board is at y = 0.

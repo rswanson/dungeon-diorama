@@ -101,6 +101,8 @@ function showBoard(file: SceneFile): void {
   scene.add(highlight.mesh);
   const path = new PathLine(file.board);
   scene.add(path.mesh);
+  // The feet of the route of a drag, near the pointer.
+  const pathLabel = new BoardLabel({ className: "path-label" });
 
   scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
 
@@ -168,6 +170,7 @@ function showBoard(file: SceneFile): void {
     state,
     highlight,
     path,
+    label: pathLabel,
     scene,
     requestDraw,
   });

@@ -211,19 +211,13 @@ test("a drag shows the route and its feet until the drop", async ({ page }) => {
   const halfway = routeTo(MIDWAY);
   await held.moveTo(MIDWAY);
   expect(await hook(page, "dragTarget")).toEqual(MIDWAY);
-  expect(await hook(page, "dragPath")).toEqual({
-    squares: halfway.squares.map(({ x, z }) => [x, z]),
-    feet: halfway.feet,
-  });
+  expect(await hook(page, "dragPath")).toEqual(halfway);
   await expect(label).toHaveText(`${halfway.feet} ft`);
 
   await held.moveTo(ACROSS);
   expect(await hook(page, "dragTarget")).toEqual(ACROSS);
   // Each square from the wizard's square to the target, both in it.
-  expect(await hook(page, "dragPath")).toEqual({
-    squares: route.squares.map(({ x, z }) => [x, z]),
-    feet: route.feet,
-  });
+  expect(await hook(page, "dragPath")).toEqual(route);
   await expect(label).toHaveText(`${route.feet} ft`);
 
   await page.mouse.up();

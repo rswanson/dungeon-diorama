@@ -1,4 +1,4 @@
-import type { Square } from "./picking.js";
+import type { Square } from "../shared/scene.js";
 
 // Where each sprite stands. It has no DOM and no three.js, so a test can run it
 // in Node. The scene file gives the start layout.
@@ -34,6 +34,19 @@ export class BoardState {
       if (square.x === x && square.z === z) return id;
     }
     return null;
+  }
+
+  /**
+   * The squares of every sprite but `id`, one byte for each square at
+   * `z * width + x`: 1 where another sprite stands, else 0. It marks only the
+   * sprites' squares, so the time grows with the number of sprites.
+   */
+  occupiedExcept(id: string): Uint8Array {
+    const occupied = new Uint8Array(this.size.width * this.size.depth);
+    for (const [other, { x, z }] of this.squares) {
+      if (other !== id) occupied[z * this.size.width + x] = 1;
+    }
+    return occupied;
   }
 
   onBoard({ x, z }: Square): boolean {

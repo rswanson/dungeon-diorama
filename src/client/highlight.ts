@@ -8,9 +8,8 @@ import {
   Shape,
   ShapeGeometry,
 } from "three";
-import type { Board } from "../shared/scene.js";
+import type { Board, Square } from "../shared/scene.js";
 import { GRID_LINE, standPoint } from "./board.js";
-import type { Square } from "./picking.js";
 
 /** A free square glows green, an occupied one red. */
 type Glow = "free" | "occupied";

@@ -52,10 +52,7 @@ export function exposeDiorama(parts: {
       return square ? [square.x, square.z] : null;
     },
     dragPath() {
-      const route = drag.route();
-      if (route === null || route === "none") return route;
-      const squares = route.squares.map(({ x, z }): [number, number] => [x, z]);
-      return { squares, feet: route.feet };
+      return drag.route();
     },
   });
 }
