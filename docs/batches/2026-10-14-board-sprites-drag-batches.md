@@ -90,7 +90,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B7: Saved moves per visitor
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** A visitor's moves stay after a reload, and each visitor has their own positions. Caster runs the game with a Postgres database.
 - **Acceptance criteria:**
   1. The server sets the `dd_visitor` cookie (random UUID, `HttpOnly`, `SameSite=Lax`, `Secure` in production, 400 days) when a request has none.
