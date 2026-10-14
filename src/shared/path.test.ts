@@ -109,7 +109,12 @@ describe("findPath", () => {
   it("counts 1, 2 and 3 diagonal steps as 5, 15 and 20 ft", () => {
     const g = grid(5, 5);
     expect(findPath(g, sq(0, 0), sq(1, 1))?.feet).toBe(5);
-    expect(findPath(g, sq(0, 0), sq(2, 2))?.feet).toBe(15);
+    // Two diagonal steps and a diagonal step with two straight steps both cost
+    // 15 ft. Of the equal routes, the one with the fewest steps wins.
+    expect(findPath(g, sq(0, 0), sq(2, 2))).toEqual({
+      squares: [sq(0, 0), sq(1, 1), sq(2, 2)],
+      feet: 15,
+    });
     expect(findPath(g, sq(0, 0), sq(3, 3))).toEqual({
       squares: [sq(0, 0), sq(1, 1), sq(2, 2), sq(3, 3)],
       feet: 20,

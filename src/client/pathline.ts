@@ -10,22 +10,15 @@ import { routeLabel, type DragRoute, type Square } from "../shared/path.js";
 import type { Board } from "../shared/scene.js";
 import { standPoint } from "./board.js";
 import type { Point } from "./point.js";
+import { across, step } from "./riser.js";
 
 /** Warm gold: it shows on stone, grass and water, and next to the green and red glows. */
 const COLOR = "#f2c14e";
 /** The line is this far above the column tops, above the glow of the target square. */
 const RAISE = 0.03;
-/** The width of the line, in board units. */
-const WIDTH = 0.1;
 /** The radius of the dot on each square of the route, in board units. */
 const DOT_RADIUS = 0.15;
 const DOT_SEGMENTS = 16;
-/**
- * A step up or down is a vertical part of the line at the edge between the
- * two squares, this far over the lower square, so it does not touch the side
- * of the higher column.
- */
-const EDGE_GAP = 0.02;
 /** The space between the pointer and the label, in CSS pixels, so a finger does not hide it. */
 const LABEL_GAP = 24;
 
@@ -86,8 +79,14 @@ export class PathLine {
     const { offsetWidth, offsetHeight } = this.label;
     const left = at.x + LABEL_GAP + offsetWidth <= window.innerWidth;
     const above = at.y - LABEL_GAP - offsetHeight >= 0;
-    const x = left ? at.x + LABEL_GAP : at.x - LABEL_GAP - offsetWidth;
-    const y = above ? at.y - LABEL_GAP - offsetHeight : at.y + LABEL_GAP;
+    const x = Math.max(
+      0,
+      left ? at.x + LABEL_GAP : at.x - LABEL_GAP - offsetWidth,
+    );
+    const y = Math.max(
+      0,
+      above ? at.y - LABEL_GAP - offsetHeight : at.y + LABEL_GAP,
+    );
     this.label.style.transform = `translate(${x}px, ${y}px)`;
   }
 
@@ -145,22 +144,9 @@ export class PathLine {
         flat(p, q);
         continue;
       }
-      // The step is at the edge (or the corner) between the two squares, moved
-      // a little over the lower square.
-      const edge = p.clone().lerp(q, 0.5);
-      const towardLower = q.clone().sub(p).setY(0).normalize();
-      if (q.y > p.y) towardLower.negate();
-      edge.addScaledVector(towardLower, EDGE_GAP);
-      const near = edge.clone().setY(p.y);
-      const far = edge.clone().setY(q.y);
+      const { near, far, risers } = step(p, q);
       flat(p, near);
-      const side = across(p, q);
-      quad(
-        near.clone().add(side),
-        far.clone().add(side),
-        far.clone().sub(side),
-        near.clone().sub(side),
-      );
+      for (const riser of risers) quad(...riser);
       flat(far, q);
     }
 
@@ -169,10 +155,4 @@ export class PathLine {
     geometry.setIndex(indices);
     return geometry;
   }
-}
-
-/** Half the width of the line, flat and at a right angle to the way from p to q. */
-function across(p: Vector3, q: Vector3): Vector3 {
-  const way = q.clone().sub(p).setY(0).normalize();
-  return new Vector3(-way.z, 0, way.x).multiplyScalar(WIDTH / 2);
 }
