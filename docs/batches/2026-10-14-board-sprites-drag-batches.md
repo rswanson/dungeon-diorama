@@ -48,7 +48,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B4: Voxel sprites
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** Six voxel sprites (fighter, wizard, rogue, cleric, goblin, orc) stand on their squares in the demo board, turn to face the camera at each 90° step, and show their name in a parchment label when clicked.
 - **Acceptance criteria:**
   1. Six 16x24 PNGs are in `public/sprites/`, and `demo.json` places them on distinct squares.
@@ -62,7 +62,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B5: Drag-move
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** The player drags a sprite to a free square and it snaps there; a drop on an occupied square or off the board puts it back. Moves are not saved yet; a reload shows the scene file layout.
 - **Acceptance criteria:**
   1. A press on a sprite and a move of more than 4 px starts a drag (mouse, pen and touch through pointer events).
