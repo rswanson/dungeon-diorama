@@ -7,7 +7,7 @@ Each batch merges to `main` with CI green, and Caster deploys `main` from B1 on.
 
 ## B1: Live skeleton on Caster
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** The Caster address for `dungeon-diorama` shows a full-window Three.js canvas with a dark background and a title "Dungeon Diorama". Each merge to `main` updates it.
 - **Acceptance criteria:**
   1. `npm run dev` opens the page locally with the canvas and the title, with no console errors.

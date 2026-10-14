@@ -1,0 +1,13 @@
+{
+  // The client: bundled by Vite, runs in the browser.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src/client", "src/shared"],
+  "exclude": ["src/**/*.test.ts"]
+}
