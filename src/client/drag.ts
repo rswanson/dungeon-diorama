@@ -5,13 +5,19 @@ import type { BoardState } from "./board-state.js";
 import { easeOut, type BoardCamera } from "./camera.js";
 import type { SquareHighlight } from "./highlight.js";
 import type { Point } from "./point.js";
-import { crossesTop, pickSquare, type Square } from "./picking.js";
+import { pickSquare, type Square } from "./picking.js";
 import type { SpriteLayer } from "./sprites.js";
 
 /** The height of a dragged sprite above the column top under it, in board units, or above the sprite on it. */
 export const LIFT = 0.5;
 /** The time of the move of a sprite onto its square after a drop or a cancel, in milliseconds. */
 export const SETTLE_MS = 150;
+/**
+ * While the pointer is this near the press point, the drag aims at the start
+ * square. It is in board units across the view, so on the screen it follows
+ * the zoom and the size of the view.
+ */
+export const HOME_RADIUS = 0.5;
 
 /** The ghost outline on the start square: a pale, see-through copy of the sprite. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
@@ -22,13 +28,15 @@ const GHOST_MATERIAL = new MeshBasicMaterial({
 });
 
 /**
- * What a press took: the sprite, and the height of the grab point above its
- * foot (`lift`, in board units). The drag aims the grab point dropped by that
- * height, so the sprite does not jump to the square behind it.
+ * What a press took: the sprite, the height of the grab point above its foot
+ * (`lift`, in board units), and the press point (`at`). The drag aims the
+ * grab point dropped by that height, so the sprite does not jump to the
+ * square behind it.
  */
 interface Grab {
   id: string;
   lift: number;
+  at: Point;
 }
 
 interface DragParts {
@@ -44,6 +52,7 @@ interface DragParts {
 
 /** A sprite that moves to its square by itself, after a drop or a cancel. */
 interface Settle {
+  id: string;
   mesh: Mesh;
   from: Vector3;
   to: Vector3;
@@ -73,16 +82,20 @@ export class SpriteDrag {
 
   /**
    * What a press at the canvas point `at` takes: the sprite under it, or null.
-   * It takes nothing while a sprite still moves onto its square, as the lift
-   * needs the sprite at rest.
+   * It does not take a sprite that still moves onto its square, as the lift
+   * needs the sprite at rest. Other sprites it takes as usual.
    */
   grab(at: Point): Grab | null {
-    if (this.busy()) return null;
+    if (this.drag) return null;
     const { board, view, sprites, state } = this.parts;
     const hit = sprites.spriteAt(view.ray(at.x, at.y));
     const from = hit && state.squareOf(hit.id);
-    if (!hit || !from) return null;
-    return { id: hit.id, lift: hit.point.y - standPoint(board, from).y };
+    if (!hit || !from || hit.id === this.settle?.id) return null;
+    return {
+      id: hit.id,
+      lift: hit.point.y - standPoint(board, from).y,
+      at: { x: at.x, y: at.y },
+    };
   }
 
   /** The square the sprite aims at now, or null off the board. */
@@ -100,7 +113,6 @@ export class SpriteDrag {
     const sprite = sprites.get(grab.id);
     const from = state.squareOf(grab.id);
     if (!sprite || !from) return;
-    this.finishSettle();
     const ghost = new Mesh(sprite.mesh.geometry, GHOST_MATERIAL);
     ghost.name = `ghost:${grab.id}`;
     ghost.position.copy(sprite.mesh.position);
@@ -126,15 +138,15 @@ export class SpriteDrag {
   }
 
   /**
-   * Aims at the square under the grab point dropped by its lift, along the
-   * ray of the pointer moved down by the lift (`aim`). The camera is
-   * orthographic, so this holds at each zoom, turn and size.
+   * Aims the drag from the pointer, each time it moves and on each frame.
    *
-   * - The drag starts on the start square, and stays on it while `aim` comes
-   *   down inside its top, also where a taller column in front hides it.
-   * - Then it aims at the first column top that `aim` comes down on. `aim`
-   *   goes through the sides of taller columns, as a sprite stands only on a
-   *   top.
+   * - While the pointer is in `HOME_RADIUS` of the press point, it aims at the
+   *   start square, also where a taller column in front hides that square.
+   * - Out of that radius, it aims at the square under the grab point dropped
+   *   by its lift: the first column top that the ray of the pointer, moved
+   *   down by the lift (`aim`), comes down on. `aim` goes through the sides
+   *   of taller columns, as a sprite stands only on a top. The camera is
+   *   orthographic, so this holds at each zoom, turn and size.
    *
    * It does nothing when the square is the same.
    */
@@ -143,12 +155,15 @@ export class SpriteDrag {
     if (!drag) return;
     const { board, view } = this.parts;
     const { pointer, grab, from } = drag;
-    this.aim.copy(view.ray(pointer.x, pointer.y));
-    this.aim.origin.y -= grab.lift;
-    const square =
-      sameSquare(drag.target, from) && crossesTop(board, this.aim, from)
-        ? from
-        : pickSquare(board, this.aim, { tops: true });
+    const home =
+      Math.hypot(pointer.x - grab.at.x, pointer.y - grab.at.y) <=
+      view.unitsToPixels(HOME_RADIUS);
+    let square: Square | null = from;
+    if (!home) {
+      this.aim.copy(view.ray(pointer.x, pointer.y));
+      this.aim.origin.y -= grab.lift;
+      square = pickSquare(board, this.aim, { tops: true });
+    }
     if (sameSquare(square, drag.target)) return;
     drag.target = square;
     this.show(square);
@@ -167,7 +182,7 @@ export class SpriteDrag {
     const drag = this.drag;
     if (!drag) return;
     this.end();
-    this.settleOn(drag.mesh, drag.from);
+    this.settleOn(drag.grab.id, drag.mesh, drag.from);
   }
 
   /**
@@ -229,7 +244,7 @@ export class SpriteDrag {
     if (!sprite || !from) return;
     const dest = to && state.canMove(id, to) ? to : from;
     state.move(id, dest);
-    this.settleOn(sprite.mesh, dest);
+    this.settleOn(id, sprite.mesh, dest);
   }
 
   /** Takes away the ghost and the glow. The sprite stays where it is. */
@@ -241,9 +256,11 @@ export class SpriteDrag {
     this.drag = null;
   }
 
-  private settleOn(mesh: Mesh, square: Square): void {
+  /** Starts the move of sprite `id` onto `square`. A move that still runs ends at once. */
+  private settleOn(id: string, mesh: Mesh, square: Square): void {
     this.finishSettle();
     this.settle = {
+      id,
       mesh,
       from: mesh.position.clone(),
       to: standPoint(this.parts.board, square),

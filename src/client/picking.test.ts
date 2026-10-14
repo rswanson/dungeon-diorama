@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Board } from "../shared/scene.js";
 import { columnTop, createBoardMesh } from "./board.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
-import { crossesTop, pickSquare, type Square } from "./picking.js";
+import { pickSquare, type Square } from "./picking.js";
 
 // A high column (9) beside low ones, so the high column hides some of them.
 const BOARD: Board = {
@@ -162,22 +162,5 @@ describe("pickSquare", () => {
       expect(pickSquare(ROW, across)).toEqual({ x: 2, z: 0 });
       expect(pickSquare(ROW, across, { tops: true })).toBeNull();
     });
-  });
-});
-
-describe("crossesTop", () => {
-  it("is true where the ray comes down through the top plane inside the square, also behind a column", () => {
-    // This ray comes down on the top of [1, 0] at x = 1.4. It reaches y = 0.5
-    // at x = 0.6, in [0, 0], behind [1, 0].
-    const ray = new Ray(new Vector3(4, 2.2, 0.5), new Vector3(-1, -0.5, 0));
-    expect(crossesTop(ROW, ray, { x: 0, z: 0 })).toBe(true);
-    expect(crossesTop(ROW, ray, { x: 2, z: 0 })).toBe(false);
-  });
-
-  it("is false for a ray that does not go down, or that starts under the top", () => {
-    const flat = new Ray(new Vector3(4, 1, 0.5), new Vector3(-1, 0, 0));
-    expect(crossesTop(ROW, flat, { x: 0, z: 0 })).toBe(false);
-    const under = new Ray(new Vector3(0.5, 0.2, 0.5), new Vector3(0, -1, 0));
-    expect(crossesTop(ROW, under, { x: 0, z: 0 })).toBe(false);
   });
 });

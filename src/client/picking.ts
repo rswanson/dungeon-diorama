@@ -94,21 +94,6 @@ export function pickSquare(
   }
 }
 
-/**
- * True when `ray` comes down through the plane of the top of `square` at a
- * point inside the square, whatever column in front hides that point.
- */
-export function crossesTop(board: Board, ray: Ray, square: Square): boolean {
-  const { origin: o, direction: d } = ray;
-  if (d.y >= 0) return false;
-  const t = (columnTop(Number(board.heights[square.z][square.x])) - o.y) / d.y;
-  if (t < 0) return false;
-  return (
-    Math.floor(o.x + d.x * t) === square.x &&
-    Math.floor(o.z + d.z * t) === square.z
-  );
-}
-
 /** The cell that holds `p`, kept on the board at its far edge. */
 function cellOf(p: number, size: number): number {
   return Math.min(Math.max(Math.floor(p), 0), size - 1);

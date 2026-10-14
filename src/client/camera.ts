@@ -220,6 +220,15 @@ export class BoardCamera {
     );
   }
 
+  /**
+   * The length in CSS pixels of `units` board units across the view (square
+   * to the camera), at the current zoom and size of the view.
+   */
+  unitsToPixels(units: number): number {
+    const { left, right, zoom } = this.camera;
+    return (units * this.width * zoom) / (right - left);
+  }
+
   /** Moves the target on the ground so that the board moves `dx`, `dy` CSS pixels on the screen. It does not clamp or place the camera. */
   private shift(dx: number, dy: number): void {
     const units =

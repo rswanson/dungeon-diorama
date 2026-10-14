@@ -6,7 +6,7 @@ import { parseScene, type Board, type SpriteSpec } from "../shared/scene.js";
 import { createBoardMesh, standPoint } from "./board.js";
 import { BoardState } from "./board-state.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
-import { LIFT, SETTLE_MS, SpriteDrag } from "./drag.js";
+import { HOME_RADIUS, LIFT, SETTLE_MS, SpriteDrag } from "./drag.js";
 import { SquareHighlight } from "./highlight.js";
 import { pickSquare, type Square } from "./picking.js";
 import type { Point } from "./point.js";
@@ -228,8 +228,74 @@ describe("SpriteDrag", () => {
     expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, HERO));
   });
 
-  it("is busy during the settle, and a press then grabs nothing", () => {
-    const { drag, view, screen, grab, at, over } = pressHero();
+  it("keeps the hero home after a drag that stays in the home radius", () => {
+    const { drag, view, state, layer, grab, at, rest } = pressHero();
+    const near = { x: at.x + NUDGE, y: at.y + NUDGE };
+    expect(Math.hypot(NUDGE, NUDGE)).toBeLessThan(
+      view.unitsToPixels(HOME_RADIUS),
+    );
+    drag.start(grab, near);
+    expect(drag.target()).toEqual(HERO);
+    drag.drop(near);
+    expect(state.squareOf("hero")).toEqual(HERO);
+    rest();
+    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, HERO));
+  });
+
+  it("aims home again when the pointer comes back to the press point", () => {
+    const { drag, view, state, grab, at, over, turn } = pressHero();
+    drag.start(grab, at);
+    drag.move(over(FREE));
+    expect(drag.target()).toEqual(FREE);
+    drag.move(at);
+    expect(drag.target()).toEqual(HERO);
+    // A turn with the pointer still on the press point keeps it home.
+    drag.move(over(FREE));
+    turn();
+    drag.move(at);
+    drag.frame(0, view.azimuth);
+    expect(drag.target()).toEqual(HERO);
+    drag.drop(at);
+    expect(state.squareOf("hero")).toEqual(HERO);
+  });
+
+  it("aims at the top of the taller column in front out of the home radius", () => {
+    const { drag, view, grab, at, aim } = pressHero();
+    // The top of [2, 2], two levels higher and diagonally in front, covers all
+    // of the hero's top on the screen.
+    const DIAGONAL: Square = { x: 2, z: 2 };
+    expect(pickSquare(BOARD, aim(at, grab.lift), { tops: true })).toEqual(
+      DIAGONAL,
+    );
+    const out = { x: at.x + view.unitsToPixels(0.6), y: at.y };
+    drag.start(grab, at);
+    expect(drag.target()).toEqual(HERO);
+    drag.move(out);
+    expect(drag.target()).toEqual(DIAGONAL);
+  });
+
+  it("follows the zoom: a still pointer that the radius then holds aims home", () => {
+    const { drag, view, grab, at } = pressHero();
+    const pointer = { x: at.x + view.unitsToPixels(0.6), y: at.y };
+    drag.start(grab, pointer);
+    expect(drag.target()).not.toEqual(HERO);
+    // At 1.5 times the zoom, the pointer is 0.4 units from the press point.
+    view.zoomAt(1.5, at.x, at.y);
+    expect(view.camera.zoom).toBe(1.5);
+    drag.frame(0, view.azimuth);
+    expect(drag.target()).toEqual(HERO);
+  });
+
+  it("grabs other sprites while one settles, but not the settling one", () => {
+    const { drag, view, layer, screen, grab, at, over } = pressHero();
+    /** A point on the middle of a sprite as it stands now. */
+    const onSprite = (id: string): Point => {
+      const sprite = layer.get(id);
+      if (!sprite) throw new Error(`No sprite "${id}".`);
+      const middle = sprite.mesh.position.clone();
+      middle.y += sprite.height / 2;
+      return screen(middle);
+    };
     expect(drag.busy()).toBe(false);
     drag.start(grab, at);
     expect(drag.busy()).toBe(true);
@@ -237,15 +303,20 @@ describe("SpriteDrag", () => {
     drag.drop(over(FREE));
     const after = performance.now();
     expect(drag.busy()).toBe(true);
-    const rat = standPoint(BOARD, RAT);
-    const onRat = screen(rat.setY(rat.y + 0.25));
-    expect(drag.grab(onRat)).toBeNull();
+    expect(drag.grab(onSprite("hero"))).toBeNull();
+    const rat = drag.grab(onSprite("rat"));
+    expect(rat?.id).toBe("rat");
     // The settle started between `before` and `after`.
     expect(drag.frame(before + SETTLE_MS / 2, view.azimuth)).toBe(true);
-    expect(drag.busy()).toBe(true);
+    expect(drag.grab(onSprite("hero"))).toBeNull();
+    // A drag of the rat leaves the hero's settle to end by itself.
+    if (rat) drag.start(rat, onSprite("rat"));
     expect(drag.frame(after + SETTLE_MS, view.azimuth)).toBe(false);
+    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(BOARD, FREE));
+    drag.cancel();
+    drag.frame(Infinity, view.azimuth);
     expect(drag.busy()).toBe(false);
-    expect(drag.grab(onRat)?.id).toBe("rat");
+    expect(drag.grab(onSprite("hero"))?.id).toBe("hero");
   });
 
   it("aims again on the next frame after a turn", () => {
@@ -286,6 +357,8 @@ describe("SpriteDrag on the demo board", () => {
       }),
     );
     const { drag, view, layer, state, screen, aim, turn, rest } = parts;
+    // Each start below is in the home radius of its press.
+    expect(NUDGE).toBeLessThan(view.unitsToPixels(HOME_RADIUS));
     let presses = 0;
     /** Presses where a taller column in front hides the sprite's foot. */
     let hidden = 0;
@@ -334,7 +407,7 @@ describe("SpriteDrag on the demo board", () => {
     expect(presses).toBeGreaterThan(sprites.length * 4 * 3);
     // The orc's foot, at least, is behind a taller column at turn 0.
     expect(hidden).toBeGreaterThan(0);
-    // The first top alone is not enough: the start square rule is needed.
+    // The first top alone is not enough: the home radius is needed.
     expect(covered).toBeGreaterThan(0);
   });
 });
