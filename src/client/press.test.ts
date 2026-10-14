@@ -146,17 +146,35 @@ describe("PressTracker drags", () => {
     expect(tracker.up(1, { x: 10, y: 40 })).toBeNull();
   });
 
-  it("keeps the drag when another button goes down", () => {
+  it("keeps the drag when a move says another button is down too", () => {
     const tracker = dragging();
-    expect(
-      tracker.down(
-        1,
-        { x: 10, y: 20 },
-        { touch: false, button: 2 },
-        0,
-        FIGHTER,
-      ),
-    ).toBeNull();
-    expect(tracker.up(1, { x: 10, y: 20 })?.kind).toBe("drop");
+    // 3 is the primary and the secondary button.
+    expect(tracker.move(1, { x: 10, y: 30 }, 3)).toEqual({
+      kind: "drag-move",
+      at: { x: 10, y: 30 },
+    });
+  });
+
+  it("drops when a move says the primary button is up and another is down", () => {
+    const tracker = dragging();
+    // The browser sends no pointerup for the primary button here, only this move.
+    expect(tracker.move(1, { x: 10, y: 30 }, 2)).toEqual({
+      kind: "drop",
+      at: { x: 10, y: 30 },
+    });
+    expect(tracker.up(1, { x: 10, y: 30 })).toBeNull();
+  });
+
+  it("ends a press that is not a drag when a move says the primary button is up", () => {
+    const tracker = new PressTracker<string>();
+    tracker.down(1, { x: 10, y: 10 }, MOUSE, 0, FIGHTER);
+    expect(tracker.move(1, { x: 10, y: 11 }, 0)).toBeNull();
+    expect(tracker.up(1, { x: 10, y: 11 })).toBeNull();
+  });
+
+  it("does not read the buttons of a touch move", () => {
+    const tracker = new PressTracker<string>();
+    tracker.down(7, { x: 5, y: 5 }, TOUCH, 1, FIGHTER);
+    expect(tracker.move(7, { x: 5, y: 25 }, 0)?.kind).toBe("drag-start");
   });
 });

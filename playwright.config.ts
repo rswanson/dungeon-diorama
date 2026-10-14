@@ -8,7 +8,12 @@ export default defineConfig({
   testDir: "e2e",
   forbidOnly: Boolean(process.env.CI),
   reporter: "list",
-  use: { baseURL: BASE },
+  use: {
+    baseURL: BASE,
+    // A failed test leaves its trace and screenshot in test-results/, which CI uploads.
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   projects: [
     {
       name: "chromium",

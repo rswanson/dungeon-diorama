@@ -1,4 +1,5 @@
 import type { BoardCamera } from "./camera.js";
+import type { Point } from "./press.js";
 
 /** The zoom change for one pixel of mouse wheel. */
 const WHEEL_ZOOM = 0.002;
@@ -20,10 +21,7 @@ interface GestureEvent extends UIEvent {
   clientY: number;
 }
 
-export interface Point {
-  x: number;
-  y: number;
-}
+export type { Point };
 
 /** What `attachCameraControls` gives back. */
 export interface CameraControls {

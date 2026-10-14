@@ -67,7 +67,9 @@ export function attachPointer<T>(
   });
 
   canvas.addEventListener("pointermove", (e) => {
-    run(tracker.move(e.pointerId, local(e)), e);
+    // A move without the primary button down is the release of a press whose
+    // button went up while another button was still down: no pointerup comes.
+    run(tracker.move(e.pointerId, local(e), e.buttons), e);
   });
 
   canvas.addEventListener("pointerup", (e) => {

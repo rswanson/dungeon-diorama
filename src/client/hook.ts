@@ -2,6 +2,7 @@ import { Vector3 } from "three";
 import type { Board } from "../shared/scene.js";
 import type { BoardState } from "./board-state.js";
 import type { BoardCamera } from "./camera.js";
+import type { SpriteDrag } from "./drag.js";
 import { standPoint, type SpriteLayer } from "./sprites.js";
 
 /**
@@ -12,12 +13,14 @@ import { standPoint, type SpriteLayer } from "./sprites.js";
 export interface Diorama {
   /** True when each sprite of the scene stands on the board. */
   readonly ready: boolean;
-  /** The point on the screen of the center of the top of square [x, z]. */
-  squareScreen(x: number, z: number): { x: number; y: number };
+  /** The point on the screen of the center of the top of square [x, z], or null for a square off the board. */
+  squareScreen(x: number, z: number): { x: number; y: number } | null;
   /** The point on the screen of the middle of a sprite's body, or null for an unknown sprite. */
   spriteScreen(id: string): { x: number; y: number } | null;
   /** The square `[x, z]` where a sprite stands at rest, or null while it is lifted, moves or did not load. */
   spriteSquare(id: string): [number, number] | null;
+  /** The square `[x, z]` the dragged sprite aims at, or null when no drag runs or the pointer is off the board. */
+  dragTarget(): [number, number] | null;
 }
 
 declare global {
@@ -31,9 +34,10 @@ export function exposeDiorama(parts: {
   view: BoardCamera;
   sprites: SpriteLayer;
   state: BoardState;
+  drag: SpriteDrag;
   ready: () => boolean;
 }): void {
-  const { board, view, sprites, state } = parts;
+  const { board, view, sprites, state, drag } = parts;
   const screen = (point: Vector3): { x: number; y: number } => {
     const { x, y } = view.screenPoint(point);
     return { x, y };
@@ -43,6 +47,7 @@ export function exposeDiorama(parts: {
       return parts.ready();
     },
     squareScreen(x: number, z: number) {
+      if (!state.onBoard({ x, z })) return null;
       return screen(standPoint(board, { x, z }));
     },
     spriteScreen(id: string) {
@@ -60,6 +65,10 @@ export function exposeDiorama(parts: {
       return sprite.mesh.position.distanceTo(rest) < 1e-6
         ? [square.x, square.z]
         : null;
+    },
+    dragTarget(): [number, number] | null {
+      const square = drag.target();
+      return square ? [square.x, square.z] : null;
     },
   });
 }

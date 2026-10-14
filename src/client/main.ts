@@ -207,6 +207,7 @@ function showBoard(file: SceneFile): void {
     view,
     sprites,
     state,
+    drag,
     ready: () => loaded === file.sprites.length,
   });
 }
