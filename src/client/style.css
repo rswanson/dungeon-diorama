@@ -2,6 +2,7 @@
   color-scheme: dark;
   --dungeon: #14110f;
   --parchment: #e8dcc0;
+  --ink: #3a2a1c;
 }
 
 html,
@@ -34,4 +35,40 @@ body {
   letter-spacing: 0.02em;
   text-shadow: 0 2px 6px rgb(0 0 0 / 60%);
   pointer-events: none;
+}
+
+.error-panel {
+  position: fixed;
+  top: 72px;
+  left: 16px;
+  right: 16px;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: 36rem;
+  max-height: calc(100% - 88px);
+  margin: 0 auto;
+  padding: 16px 20px;
+  overflow-y: auto;
+  border: 3px double var(--ink);
+  border-radius: 4px;
+  background: var(--parchment);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.error-panel h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.error-panel ul {
+  margin: 12px 0 0;
+  padding-left: 1.25em;
+}
+
+.error-panel li + li {
+  margin-top: 4px;
 }

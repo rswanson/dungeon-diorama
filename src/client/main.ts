@@ -1,37 +1,146 @@
-import { Color, OrthographicCamera, Scene, WebGLRenderer } from "three";
+import {
+  Box3,
+  Color,
+  DirectionalLight,
+  HemisphereLight,
+  PCFShadowMap,
+  Scene,
+  Sphere,
+  Vector3,
+  WebGLRenderer,
+} from "three";
+import {
+  isSceneName,
+  parseScene,
+  type Scene as SceneFile,
+} from "../shared/scene.js";
+import { createBoardMesh } from "./board.js";
+import { BoardCamera } from "./camera.js";
+import { showErrorPanel } from "./errors.js";
 import "./style.css";
 
 const DUNGEON = new Color("#14110f");
 const MAX_PIXEL_RATIO = 2;
-/** The half height of the view, in board units. */
-const VIEW_HALF_HEIGHT = 10;
+/** The sun is high on the -x side, so a step casts its shadow to +x. */
+const SUN_DIRECTION = new Vector3(-0.55, 1, 0.3).normalize();
+const SHADOW_MAP_SIZE = 2048;
 
-const canvas = document.querySelector<HTMLCanvasElement>("#scene");
-if (!canvas) throw new Error("The page has no #scene canvas.");
-
-const renderer = new WebGLRenderer({ canvas, antialias: true });
-
-const scene = new Scene();
-scene.background = DUNGEON;
-
-const camera = new OrthographicCamera();
-camera.position.set(0, 0, 10);
-
-function resize(): void {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
-  renderer.setSize(width, height, false);
-
-  const halfWidth = VIEW_HALF_HEIGHT * (width / height);
-  camera.left = -halfWidth;
-  camera.right = halfWidth;
-  camera.top = VIEW_HALF_HEIGHT;
-  camera.bottom = -VIEW_HALF_HEIGHT;
-  camera.updateProjectionMatrix();
-
-  renderer.render(scene, camera);
+/** A problem with a scene that the page shows to the person, with a heading and a list. */
+class SceneError extends Error {
+  constructor(
+    readonly heading: string,
+    readonly problems: string[] = [],
+  ) {
+    super(heading);
+  }
 }
 
-window.addEventListener("resize", resize);
-resize();
+async function loadScene(name: string): Promise<SceneFile> {
+  const missing = new SceneError(`The scene "${name}" does not exist.`);
+  if (!isSceneName(name)) throw missing;
+
+  // Accept: application/json stops Vite's dev HTML fallback, so a missing file is a real 404.
+  const res = await fetch(`/scenes/${name}.json`, {
+    headers: { Accept: "application/json" },
+  });
+  if (res.status === 404) throw missing;
+  if (!res.ok) {
+    throw new SceneError(`The scene "${name}" did not load.`, [
+      `The server answered with status ${res.status}.`,
+    ]);
+  }
+
+  const result = parseScene(await res.text());
+  if (!result.ok) {
+    throw new SceneError(`The scene "${name}" has problems:`, result.problems);
+  }
+  return result.scene;
+}
+
+function showBoard(file: SceneFile): void {
+  const canvas = document.querySelector<HTMLCanvasElement>("#scene");
+  if (!canvas) throw new Error("The page has no #scene canvas.");
+
+  const renderer = new WebGLRenderer({ canvas, antialias: true });
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFShadowMap;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+
+  const scene = new Scene();
+  scene.background = DUNGEON;
+
+  const board = createBoardMesh(file.board);
+  scene.add(board);
+
+  const box = new Box3().setFromObject(board);
+  const view = new BoardCamera(box);
+
+  scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
+
+  // The sun is twice the board's radius from its center, so the shadow camera
+  // holds the whole board, whatever its size.
+  const { radius } = box.getBoundingSphere(new Sphere());
+  const sun = new DirectionalLight("#fff0d4", 2.6);
+  sun.position.copy(view.target).addScaledVector(SUN_DIRECTION, radius * 2);
+  sun.target.position.copy(view.target);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.02;
+  Object.assign(sun.shadow.camera, {
+    left: -radius,
+    right: radius,
+    top: radius,
+    bottom: -radius,
+    near: radius,
+    far: radius * 3,
+  });
+  sun.shadow.camera.updateProjectionMatrix();
+  scene.add(sun, sun.target);
+
+  // The board does not move, so the shadows are drawn once. A later change that
+  // moves a shadow caster must set `needsUpdate` again.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+
+  function draw(): void {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    // Browser zoom or a move to another display changes the ratio.
+    const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
+    renderer.setSize(width, height, false);
+    view.resize(width, height);
+    renderer.render(scene, view.camera);
+  }
+
+  // Several resize events in one frame cause one draw.
+  let drawQueued = false;
+  window.addEventListener("resize", () => {
+    if (drawQueued) return;
+    drawQueued = true;
+    requestAnimationFrame(() => {
+      drawQueued = false;
+      draw();
+    });
+  });
+  draw();
+}
+
+async function main(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  try {
+    showBoard(await loadScene(params.get("scene") ?? "demo"));
+  } catch (error) {
+    if (error instanceof SceneError) {
+      showErrorPanel(error.heading, error.problems);
+    } else {
+      throw error;
+    }
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error(error);
+  showErrorPanel("The scene did not load.", [String(error)]);
+});
