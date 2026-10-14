@@ -5,13 +5,13 @@ import type { BoardState } from "./board-state.js";
 import { easeOut, type BoardCamera } from "./camera.js";
 import type { SquareHighlight } from "./highlight.js";
 import type { Point } from "./point.js";
-import { pickSquare, type Square } from "./picking.js";
+import { crossesTop, pickSquare, type Square } from "./picking.js";
 import type { SpriteLayer } from "./sprites.js";
 
 /** The height of a dragged sprite above the column top under it, in board units, or above the sprite on it. */
-const LIFT = 0.5;
+export const LIFT = 0.5;
 /** The time of the move of a sprite onto its square after a drop or a cancel, in milliseconds. */
-const SETTLE_MS = 150;
+export const SETTLE_MS = 150;
 
 /** The ghost outline on the start square: a pale, see-through copy of the sprite. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
@@ -71,8 +71,13 @@ export class SpriteDrag {
 
   constructor(private readonly parts: DragParts) {}
 
-  /** What a press at the canvas point `at` takes: the sprite under it, or null. */
+  /**
+   * What a press at the canvas point `at` takes: the sprite under it, or null.
+   * It takes nothing while a sprite still moves onto its square, as the lift
+   * needs the sprite at rest.
+   */
   grab(at: Point): Grab | null {
+    if (this.busy()) return null;
     const { board, view, sprites, state } = this.parts;
     const hit = sprites.spriteAt(view.ray(at.x, at.y));
     const from = hit && state.squareOf(hit.id);
@@ -109,9 +114,8 @@ export class SpriteDrag {
       pointer: at,
       target: from,
     };
-    // The first target is the start square, whatever a taller column in front
-    // of its foot hides.
     this.show(from);
+    this.retarget();
     this.parts.requestDraw();
   }
 
@@ -122,19 +126,29 @@ export class SpriteDrag {
   }
 
   /**
-   * Aims at the square under the grab point dropped by its lift: the ray of
-   * the pointer, moved down by the lift. The camera is orthographic, so this
-   * holds at each zoom, turn and size. It does nothing when the square is the
-   * same.
+   * Aims at the square under the grab point dropped by its lift, along the
+   * ray of the pointer moved down by the lift (`aim`). The camera is
+   * orthographic, so this holds at each zoom, turn and size.
+   *
+   * - The drag starts on the start square, and stays on it while `aim` comes
+   *   down inside its top, also where a taller column in front hides it.
+   * - Then it aims at the first column top that `aim` comes down on. `aim`
+   *   goes through the sides of taller columns, as a sprite stands only on a
+   *   top.
+   *
+   * It does nothing when the square is the same.
    */
   private retarget(): void {
     const drag = this.drag;
     if (!drag) return;
     const { board, view } = this.parts;
-    const { pointer, grab } = drag;
+    const { pointer, grab, from } = drag;
     this.aim.copy(view.ray(pointer.x, pointer.y));
     this.aim.origin.y -= grab.lift;
-    const square = pickSquare(board, this.aim);
+    const square =
+      sameSquare(drag.target, from) && crossesTop(board, this.aim, from)
+        ? from
+        : pickSquare(board, this.aim, { tops: true });
     if (sameSquare(square, drag.target)) return;
     drag.target = square;
     this.show(square);

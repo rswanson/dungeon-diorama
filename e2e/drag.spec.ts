@@ -140,6 +140,20 @@ test("a drop on the goblin's square puts the fighter back", async ({
   expect(await hook(page, "spriteSquare", "goblin")).toEqual(GOBLIN);
 });
 
+test("a drop off the board puts the fighter back", async ({ page }) => {
+  const held = await grab(page, "fighter");
+  await held.nudge();
+  expect(await hook(page, "dragTarget")).toEqual(FIGHTER);
+  // The top left corner of the window: the board is not under it.
+  await page.mouse.move(1, 1, { steps: MOVE_STEPS });
+  // No square glows.
+  expect(await hook(page, "dragTarget")).toBeNull();
+  await page.mouse.up();
+  await expect
+    .poll(() => hook(page, "spriteSquare", "fighter"))
+    .toEqual(FIGHTER);
+});
+
 test("Esc during a drag puts the fighter back", async ({ page }) => {
   const held = await grab(page, "fighter");
   await held.moveTo(FREE);
