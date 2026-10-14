@@ -15,13 +15,17 @@ import {
   type Scene as SceneFile,
 } from "../shared/scene.js";
 import { createBoardMesh } from "./board.js";
+import { BoardState } from "./board-state.js";
 import { BoardCamera } from "./camera.js";
 import { attachCameraControls } from "./controls.js";
+import { SpriteDrag } from "./drag.js";
 import { showErrorPanel } from "./errors.js";
+import { SquareHighlight } from "./highlight.js";
+import { exposeDiorama } from "./hook.js";
 import { showTurnButtons } from "./hud.js";
 import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
-import { attachPress } from "./select.js";
+import { attachPointer } from "./pointer.js";
 import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
 
@@ -90,6 +94,10 @@ function showBoard(file: SceneFile): void {
   const sprites = new SpriteLayer(file.board, [board]);
   scene.add(sprites.group);
   const label = new BoardLabel();
+  // Where each sprite stands. Moves are not saved: a reload shows the scene file layout.
+  const state = new BoardState(file.board, file.sprites);
+  const highlight = new SquareHighlight(file.board);
+  scene.add(highlight.mesh);
 
   scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
 
@@ -129,9 +137,12 @@ function showBoard(file: SceneFile): void {
     }
     // A turn draws again on each frame until it ends.
     // One clock: `rotate` stamps the turn with performance.now(), so does this.
-    if (view.tick(performance.now())) requestDraw();
+    const now = performance.now();
+    if (view.tick(now)) requestDraw();
     // The sprites turn with the camera, during a turn too, so they always face it.
     sprites.face(view.azimuth);
+    // A drop or a return draws again on each frame until it ends, as a turn does.
+    if (drag.frame(now, view.azimuth)) requestDraw();
     label.place(view);
     renderer.render(scene, view.camera);
   }
@@ -147,11 +158,26 @@ function showBoard(file: SceneFile): void {
     });
   }
 
+  const drag = new SpriteDrag({
+    board: file.board,
+    view,
+    sprites,
+    state,
+    highlight,
+    scene,
+    requestDraw,
+  });
+
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
 
-  attachPress(canvas, controls, {
+  attachPointer(canvas, controls, {
+    grab: (at) => drag.grab(at),
+    dragStart: (id, at) => drag.start(id, at),
+    dragMove: (at) => drag.move(at),
+    drop: (at) => drag.drop(at),
+    dragCancel: () => drag.cancel(),
     click(at) {
       const id = sprites.spriteAt(view.ray(at.x, at.y));
       const sprite = id === null ? undefined : sprites.get(id);
@@ -167,12 +193,22 @@ function showBoard(file: SceneFile): void {
   draw();
 
   // The board shows first. Each sprite stands on it when its image loads.
+  let loaded = 0;
   for (const spec of file.sprites) {
     void loadSpriteVoxels(spec).then((voxels) => {
-      sprites.add(spec, voxels);
+      sprites.add(spec, voxels, state.squareOf(spec.id));
+      loaded++;
       requestDraw();
     });
   }
+
+  exposeDiorama({
+    board: file.board,
+    view,
+    sprites,
+    state,
+    ready: () => loaded === file.sprites.length,
+  });
 }
 
 async function main(): Promise<void> {

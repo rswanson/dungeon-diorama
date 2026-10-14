@@ -4,10 +4,12 @@ import {
   Mesh,
   Raycaster,
   SRGBColorSpace,
+  Vector3,
   type Object3D,
   type Ray,
 } from "three";
 import type { Board, SpriteSpec } from "../shared/scene.js";
+import type { Square } from "./picking.js";
 import {
   addQuad,
   columnTop,
@@ -172,6 +174,15 @@ export function spriteHeight({ voxels }: SpriteVoxels): number {
   return voxels.reduce((top, v) => Math.max(top, v.y + 1), 0) * VOXEL;
 }
 
+/** The point where a sprite stands on a square: the center of the column top. */
+export function standPoint(
+  board: Board,
+  { x, z }: Square,
+  out = new Vector3(),
+): Vector3 {
+  return out.set(x + 0.5, columnTop(Number(board.heights[z][x])), z + 0.5);
+}
+
 /** One sprite on the board. */
 export interface PlacedSprite {
   spec: SpriteSpec;
@@ -198,8 +209,15 @@ export class SpriteLayer {
     this.group.name = "sprites";
   }
 
-  /** Puts a sprite on its square. It replaces a sprite with the same id. */
-  add(spec: SpriteSpec, voxels: SpriteVoxels): PlacedSprite {
+  /**
+   * Puts a sprite on a square: `at`, or the square of the scene file. It
+   * replaces a sprite with the same id.
+   */
+  add(
+    spec: SpriteSpec,
+    voxels: SpriteVoxels,
+    at: Square = { x: spec.at[0], z: spec.at[1] },
+  ): PlacedSprite {
     this.remove(spec.id);
     const geometry = geometryFrom(buildSpriteGeometry(voxels));
     const mesh = new Mesh(geometry, VOXEL_MATERIAL);
@@ -207,12 +225,7 @@ export class SpriteLayer {
     mesh.userData.spriteId = spec.id;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    const [x, z] = spec.at;
-    mesh.position.set(
-      x + 0.5,
-      columnTop(Number(this.board.heights[z][x])),
-      z + 0.5,
-    );
+    standPoint(this.board, at, mesh.position);
     mesh.rotation.y = this.yaw;
     mesh.updateMatrixWorld();
     this.group.add(mesh);

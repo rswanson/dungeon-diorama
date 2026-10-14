@@ -7,7 +7,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 - Client: TypeScript, Three.js and Vite. There is no UI framework.
 - Server: Node 22, TypeScript and Hono (`@hono/node-server`). In production, the server serves the built client, the files in `public/` and a JSON API.
 - Database (from batch B7): Postgres through the `pg` package, with plain SQL migrations.
-- Tests: Vitest for unit and API tests. Playwright for the end-to-end test (from batch B5).
+- Tests: Vitest for unit and API tests. Playwright (Chromium only) for the end-to-end drag test in `e2e/`.
 - Lint and format: ESLint (flat config, `typescript-eslint`) and Prettier.
 - Host: Caster, project `dungeon-diorama`, in the owner's Caster account. Deploy on push is off. After each merge to `main`, Claude deploys `main` through Caster's MCP server (below).
 
@@ -26,9 +26,10 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 | `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                                                   |
 | `tsconfig.json`            | The type check for the client and `src/shared`                                                                                                 |
 | `tsconfig.server.json`     | The type check and the build for the server and `src/shared`                                                                                   |
-| `tsconfig.node.json`       | The type check for the tests, `vite.config.ts` and `scripts/`                                                                                  |
+| `tsconfig.node.json`       | The type check for the tests, `e2e/`, `vite.config.ts`, `playwright.config.ts` and `scripts/`                                                  |
 | `Dockerfile`               | The production image. It builds, then runs `node dist/server/index.js` with only the runtime packages                                          |
-| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build` and a smoke test of the Docker image on each pull request and each push to `main`                         |
+| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build`, `npm run e2e` and a smoke test of the Docker image on each pull request and each push to `main`          |
+| `e2e/`                     | The Playwright test (`playwright.config.ts`). It reads the board through `window.diorama` (`src/client/hook.ts`), which changes nothing        |
 
 - Put a package that the server uses at runtime in `dependencies`. Put all other packages in `devDependencies`. Vite bundles the client packages (for example `three`), so they are dev packages.
 - The server code uses Node ESM. A relative import in `src/server/` or `src/shared/` must end in `.js`.
@@ -47,6 +48,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 | `npm run format`       | Formats the files with Prettier                                                  |
 | `npm run format:check` | Checks the format with Prettier                                                  |
 | `npm test`             | Runs the Vitest tests                                                            |
+| `npm run e2e`          | Runs the Playwright test on the built server. Run `npm run build` first          |
 | `npm run sprites`      | Writes the starter sprite PNGs from `scripts/sprites.ts` (with `tsx`)            |
 
 In dev, Vite sends `/api` and `/healthz` to the server on port 3000.
