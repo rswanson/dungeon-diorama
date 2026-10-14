@@ -38,8 +38,9 @@ export class BoardState {
 
   /**
    * The squares of every sprite but `id`, one byte for each square at
-   * `z * width + x`: 1 where another sprite stands, else 0. It marks only the
-   * sprites' squares, so the time grows with the number of sprites.
+   * `z * width + x`: 1 where another sprite stands, else 0. It makes an array
+   * of width * depth bytes for each call, and it marks the squares of the other
+   * sprites, so the cost is the size of the board plus the number of sprites.
    */
   occupiedExcept(id: string): Uint8Array {
     const occupied = new Uint8Array(this.size.width * this.size.depth);

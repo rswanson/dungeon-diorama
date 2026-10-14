@@ -82,7 +82,8 @@ async function grab(
 ): Promise<{
   /** A few pixels from the press: past the click slop, near the grab point. */
   nudge(): Promise<void>;
-  moveTo(square: Square): Promise<void>;
+  /** Moves the mouse for the square and gives back where the pointer is. */
+  moveTo(square: Square): Promise<{ x: number; y: number }>;
 }> {
   const start = await hook(page, "spriteSquare", id);
   const body = await hook(page, "spriteScreen", id);
@@ -100,9 +101,9 @@ async function grab(
       const to = await hook(page, "squareScreen", ...square);
       if (!to)
         throw new Error(`Square [${square.join(", ")}] is off the board.`);
-      await page.mouse.move(to.x + body.x - foot.x, to.y + body.y - foot.y, {
-        steps: MOVE_STEPS,
-      });
+      const pointer = { x: to.x + body.x - foot.x, y: to.y + body.y - foot.y };
+      await page.mouse.move(pointer.x, pointer.y, { steps: MOVE_STEPS });
+      return pointer;
     },
   };
 }
@@ -209,16 +210,42 @@ test("a drag shows the route and its feet until the drop", async ({ page }) => {
   const label = page.locator(".path-label");
   // On the way, on a free square between the two: the route is to that square.
   const halfway = routeTo(MIDWAY);
-  await held.moveTo(MIDWAY);
+  const nearPointer = async (pointer: { x: number; y: number }) => {
+    const box = await label.boundingBox();
+    const viewport = page.viewportSize();
+    if (!box || !viewport) throw new Error("The route label has no box.");
+    // The label lies fully inside the window.
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    // Its nearest edge is within 60 px of the pointer, on each axis.
+    const gapX = Math.max(
+      box.x - pointer.x,
+      pointer.x - (box.x + box.width),
+      0,
+    );
+    const gapY = Math.max(
+      box.y - pointer.y,
+      pointer.y - (box.y + box.height),
+      0,
+    );
+    expect(gapX).toBeLessThanOrEqual(60);
+    expect(gapY).toBeLessThanOrEqual(60);
+  };
+
+  const pointerMidway = await held.moveTo(MIDWAY);
   expect(await hook(page, "dragTarget")).toEqual(MIDWAY);
   expect(await hook(page, "dragPath")).toEqual(halfway);
   await expect(label).toHaveText(`${halfway.feet} ft`);
+  await nearPointer(pointerMidway);
 
-  await held.moveTo(ACROSS);
+  const pointerAcross = await held.moveTo(ACROSS);
   expect(await hook(page, "dragTarget")).toEqual(ACROSS);
   // Each square from the wizard's square to the target, both in it.
   expect(await hook(page, "dragPath")).toEqual(route);
   await expect(label).toHaveText(`${route.feet} ft`);
+  await nearPointer(pointerAcross);
 
   await page.mouse.up();
   await expect.poll(() => hook(page, "spriteSquare", "wizard")).toEqual(ACROSS);

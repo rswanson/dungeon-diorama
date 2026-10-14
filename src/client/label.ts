@@ -5,6 +5,11 @@ import type { Point } from "./point.js";
 /** The space between the pointer and a label at the pointer, in CSS pixels, so a finger does not hide it. */
 const POINTER_GAP = 24;
 
+/** `value` in the range 0 to `max`, or 0 when `max` is below 0 (the window is smaller than the label). */
+function clamp(value: number, max: number): number {
+  return Math.max(0, Math.min(value, max));
+}
+
 /**
  * A small parchment label. It stands above an object on the board (`show`),
  * or near the pointer (`showAt`).
@@ -65,13 +70,14 @@ export class BoardLabel {
     const { width, height } = this.size;
     const right = at.x + POINTER_GAP + width <= window.innerWidth;
     const above = at.y - POINTER_GAP - height >= 0;
-    const x = Math.max(
-      0,
+    // Then keeps the whole label in the window on all four sides.
+    const x = clamp(
       right ? at.x + POINTER_GAP : at.x - POINTER_GAP - width,
+      window.innerWidth - width,
     );
-    const y = Math.max(
-      0,
+    const y = clamp(
       above ? at.y - POINTER_GAP - height : at.y + POINTER_GAP,
+      window.innerHeight - height,
     );
     this.element.style.transform = `translate(${x}px, ${y}px)`;
   }
