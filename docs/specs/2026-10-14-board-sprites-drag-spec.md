@@ -13,11 +13,11 @@ Date: 2026-10-14
 - Let the player move a sprite with click and drag (mouse and touch). The sprite snaps to a square.
 - Load the board and the sprites from a JSON scene file and PNG images, so a person can change them without code.
 - Save each visitor's sprite moves in Postgres, so a reload shows the board as they left it.
-- Put the game online with Caster, in the user's account, updated on each push to `main`.
+- Put the game online with Caster, in the user's account. Claude deploys `main` through Caster's MCP server after each merge.
 
 ### Non-goals (this milestone)
 
-- No in-game editor. A person edits the scene file and pushes it.
+- No in-game editor. A person edits the scene file and merges it to `main`.
 - No 3.5e rules: no speed limit, no climb limit, no initiative, no turns, no attacks, no character sheets.
 - No sign-in, no shared board, no live updates between tabs or people.
 - No reset of a visitor's saved positions.
@@ -42,7 +42,7 @@ The user is a person who builds and runs a tabletop RPG scene in a browser. Each
 - Server: Node 22, TypeScript, Hono. It serves the built client, the scene files and the sprite images, and a JSON API. Postgres through the `pg` package, with plain SQL migrations.
 - Tests: Vitest for unit and API tests (API tests against a real Postgres), Playwright for one end-to-end drag test.
 - CI on pull requests (GitHub Actions, with a Postgres service): type check, lint, unit and API tests, build, end-to-end test.
-- Deploy: Caster project `dungeon-diorama` from the GitHub repo, with a Caster Postgres database, deploying on each push to `main`, on its default Caster address.
+- Deploy: Caster project `dungeon-diorama` from the GitHub repo, with a Caster Postgres database, on its default Caster address. Deploy on push is off: after each merge, Claude runs Caster's `setup-project` with `project: dungeon-diorama` from `main`.
 
 ## Behavior (interfaces, data, commands)
 
@@ -197,7 +197,7 @@ CREATE TABLE sprite_positions (
 - Each sprite can be dragged to any free square with a mouse and on an iPad.
 - The path line and the feet label update while the pointer moves.
 - Moves stay after a reload, per visitor.
-- The game is live on its Caster address, and a merge to `main` updates it.
+- The game is live on its Caster address, and the deploy after each merge to `main` updates it.
 - Works on the latest desktop Chrome, Firefox and Safari, and iPad Safari.
 - The frame rate stays at 60 fps on a 2020 MacBook Air during a drag.
 
@@ -236,4 +236,4 @@ CREATE TABLE sprite_positions (
 | D22 | Storage | Node (Hono) server + Caster Postgres; scene file seeds, moves save | User |
 | D23 | Who moves sprites | Each visitor has their own positions (cookie visitor id) | User |
 | D24 | Reset | No reset in this milestone | User |
-| D25 | Deploy trigger | Every push to `main` | User |
+| D25 | Deploy trigger | Claude deploys `main` through Caster's MCP after each merge; no deploy on push (changed on 2026-10-14) | User |
