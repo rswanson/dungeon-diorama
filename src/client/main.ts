@@ -106,7 +106,7 @@ function showBoard(file: SceneFile): void {
   renderer.shadowMap.needsUpdate = true;
 
   let size = "";
-  function draw(now: number): void {
+  function draw(): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
     // Browser zoom or a move to another display changes the ratio.
@@ -119,7 +119,8 @@ function showBoard(file: SceneFile): void {
       view.resize(width, height);
     }
     // A turn draws again on each frame until it ends.
-    if (view.tick(now)) requestDraw();
+    // One clock: `rotate` stamps the turn with performance.now(), so does this.
+    if (view.tick(performance.now())) requestDraw();
     renderer.render(scene, view.camera);
   }
 
@@ -128,16 +129,16 @@ function showBoard(file: SceneFile): void {
   function requestDraw(): void {
     if (drawQueued) return;
     drawQueued = true;
-    requestAnimationFrame((now) => {
+    requestAnimationFrame(() => {
       drawQueued = false;
-      draw(now);
+      draw();
     });
   }
 
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
-  draw(performance.now());
+  draw();
 }
 
 async function main(): Promise<void> {

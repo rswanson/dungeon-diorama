@@ -127,4 +127,33 @@ describe("BoardCamera", () => {
       expect(v.target.z).toBeLessThanOrEqual(BOX.max.z);
     }
   });
+
+  it("returns true when the view changed and false when a limit stops it", () => {
+    const v = view();
+    expect(v.zoomAt(2, W / 2, H / 2)).toBe(true);
+    expect(v.pan(30, -20)).toBe(true);
+
+    // Zooming out past the smallest zoom changes nothing.
+    v.zoomAt(1e-6, W / 2, H / 2);
+    expect(v.camera.zoom).toBe(MIN_ZOOM);
+    const target = v.target.clone();
+    expect(v.zoomAt(0.5, 100, 100)).toBe(false);
+    expect(v.camera.zoom).toBe(MIN_ZOOM);
+    expect(v.target).toEqual(target);
+
+    // The same at the largest zoom.
+    v.zoomAt(1e6, W / 2, H / 2);
+    const zoom = v.camera.zoom;
+    expect(zoom).toBe(maxZoom(v.camera));
+    const atMax = v.target.clone();
+    expect(v.zoomAt(2, 100, 100)).toBe(false);
+    expect(v.camera.zoom).toBe(zoom);
+    expect(v.target).toEqual(atMax);
+
+    // A pan against the edge of the board moves nothing.
+    v.pan(1e5, 0);
+    const edge = v.target.clone();
+    expect(v.pan(1e5, 0)).toBe(false);
+    expect(v.target).toEqual(edge);
+  });
 });
