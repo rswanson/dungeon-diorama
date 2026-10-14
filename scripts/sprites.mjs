@@ -1,14 +1,17 @@
-// Writes the starter sprites to public/sprites/ as 16x24 PNGs.
+// Makes the starter sprites as 16x24 PNGs. Run as a script, it writes them to
+// public/sprites/. A test imports `renderSprites` and compares its bytes with
+// those files.
 // Each sprite is rows of palette characters. "." is a transparent pixel.
 // Run it with `npm run sprites` after a change to the art.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 
 const WIDTH = 16;
 const HEIGHT = 24;
-const OUT = join(dirname(fileURLToPath(import.meta.url)), "../public/sprites");
+const SCRIPT = fileURLToPath(import.meta.url);
+const OUT = join(dirname(SCRIPT), "../public/sprites");
 
 /** The colors that all sprites share. */
 const BASE = {
@@ -312,9 +315,25 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
-mkdirSync(OUT, { recursive: true });
-for (const [name, sprite] of Object.entries(SPRITES)) {
-  const file = join(OUT, `${name}.png`);
-  writeFileSync(file, encodePng(WIDTH, HEIGHT, pixels(name, sprite)));
-  console.log(`Wrote ${file}`);
+/** The PNG bytes of each starter sprite, by id. */
+export function renderSprites() {
+  return Object.fromEntries(
+    Object.entries(SPRITES).map(([name, sprite]) => [
+      name,
+      encodePng(WIDTH, HEIGHT, pixels(name, sprite)),
+    ]),
+  );
+}
+
+// Write the files only when this file runs as the script, not when a test imports it.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  mkdirSync(OUT, { recursive: true });
+  for (const [name, png] of Object.entries(renderSprites())) {
+    const file = join(OUT, `${name}.png`);
+    writeFileSync(file, png);
+    console.log(`Wrote ${file}`);
+  }
 }

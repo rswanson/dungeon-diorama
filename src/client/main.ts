@@ -22,7 +22,7 @@ import { showTurnButtons } from "./hud.js";
 import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
 import { attachPress } from "./select.js";
-import { headOf, SpriteLayer } from "./sprites.js";
+import { headOf, MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
 
 const DUNGEON = new Color("#14110f");
@@ -80,7 +80,10 @@ function showBoard(file: SceneFile): void {
   const board = createBoardMesh(file.board);
   scene.add(board);
 
+  // The view holds the board and the tallest sprite on its highest column. The
+  // box has the board's footprint, so the pan limit stays on the board.
   const box = new Box3().setFromObject(board);
+  box.max.y += MAX_HEIGHT * VOXEL;
   const view = new BoardCamera(box);
 
   // The board hides a sprite behind it from a click.

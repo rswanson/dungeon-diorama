@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
-import { Box3, Vector3 } from "three";
+import { Box3, Ray, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
+import { renderSprites } from "../../scripts/sprites.mjs";
 import { parseScene, type Board, type SpriteSpec } from "../shared/scene.js";
-import { columnTop } from "./board.js";
+import { columnTop, createBoardMesh } from "./board.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
 import {
   buildSpriteGeometry,
@@ -123,6 +124,47 @@ describe("SpriteLayer", () => {
   });
 });
 
+describe("SpriteLayer.spriteAt", () => {
+  /** Two squares deep: the sprite stands on [0, 0], and [0, 1] is in front of it (+z). */
+  function stage(front: string): { layer: SpriteLayer } {
+    const board: Board = {
+      width: 2,
+      depth: 2,
+      materials: BOARD.materials,
+      heights: ["00", front],
+      tiles: ["ss", "ss"],
+    };
+    const layer = new SpriteLayer(board, [createBoardMesh(board)]);
+    // A square sprite of 4 px: 0.25 high, 0.25 wide, on the top of [0, 0] at y = 0.5.
+    layer.add(
+      { ...SPEC, at: [0, 0] },
+      {
+        width: 4,
+        voxels: voxelsFromPixels(4, 4, image(Array(4).fill("####"))),
+      },
+    );
+    return { layer };
+  }
+  /** A ray at height y that goes from +z towards -z along x. */
+  const along = (x: number, y: number): Ray =>
+    new Ray(new Vector3(x, y, 5), new Vector3(0, 0, -1));
+
+  it("returns the id of the sprite that the ray hits", () => {
+    const { layer } = stage("00");
+    expect(layer.spriteAt(along(0.5, 0.6))).toBe("imp");
+  });
+
+  it("returns null when a board column in front hides the sprite", () => {
+    const { layer } = stage("30");
+    expect(layer.spriteAt(along(0.5, 0.6))).toBeNull();
+  });
+
+  it("returns null when the ray misses", () => {
+    const { layer } = stage("00");
+    expect(layer.spriteAt(along(1.5, 0.6))).toBeNull();
+  });
+});
+
 describe("fitsSprite", () => {
   it("takes images up to 16 px wide and 32 px high", () => {
     expect(fitsSprite(16, 32)).toBe(true);
@@ -146,6 +188,15 @@ describe("the starter sprites", () => {
       expect(raw.length, name).toBe(24 * (1 + 16 * 4));
       const bottom = raw.subarray(23 * 65 + 1, 24 * 65);
       expect(bottom.some((_, i) => i % 4 === 3 && bottom[i] >= 128)).toBe(true);
+    }
+  });
+
+  it("are the PNGs that scripts/sprites.mjs makes", () => {
+    const made = renderSprites();
+    expect(Object.keys(made).sort()).toEqual([...STARTERS].sort());
+    for (const [name, png] of Object.entries(made)) {
+      const file = readFileSync(new URL(`sprites/${name}.png`, PUBLIC));
+      expect(png.equals(file), `${name}.png: run npm run sprites`).toBe(true);
     }
   });
 
