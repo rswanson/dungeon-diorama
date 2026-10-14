@@ -35,7 +35,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B3: Camera controls
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** The player pans, zooms and rotates the board in 90° steps with mouse, keyboard, on-screen buttons or touch.
 - **Acceptance criteria:**
   1. Right-drag and middle-drag pan on desktop; two-finger drag pans on touch.
@@ -48,7 +48,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B4: Voxel sprites
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** Six voxel sprites (fighter, wizard, rogue, cleric, goblin, orc) stand on their squares in the demo board, turn to face the camera at each 90° step, and show their name in a parchment label when clicked.
 - **Acceptance criteria:**
   1. Six 16x24 PNGs are in `public/sprites/`, and `demo.json` places them on distinct squares.
