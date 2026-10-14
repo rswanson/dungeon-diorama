@@ -44,6 +44,17 @@ describe("BoardCamera", () => {
     return { x: ((ndc.x + 1) / 2) * W, y: ((1 - ndc.y) / 2) * H };
   }
 
+  it("gives the screen point of a board point, the reverse of the ray", () => {
+    const v = view();
+    v.zoomAt(2, 600, 200);
+    const point = v.ray(300, 450).at(70, new Vector3());
+    const at = v.screenPoint(point);
+    expect(at.x).toBeCloseTo(300, 6);
+    expect(at.y).toBeCloseTo(450, 6);
+    expect(at.x).toBeCloseTo(screenOf(v, point).x, 6);
+    expect(at.y).toBeCloseTo(screenOf(v, point).y, 6);
+  });
+
   it("turns the board a quarter turn clockwise on the screen in 250 ms", () => {
     const v = view();
     const start = v.azimuth;

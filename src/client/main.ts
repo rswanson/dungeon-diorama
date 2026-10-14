@@ -19,9 +19,15 @@ import { BoardCamera } from "./camera.js";
 import { attachCameraControls } from "./controls.js";
 import { showErrorPanel } from "./errors.js";
 import { showTurnButtons } from "./hud.js";
+import { loadSpriteVoxels } from "./images.js";
+import { BoardLabel } from "./label.js";
+import { attachPress } from "./select.js";
+import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
 
 const DUNGEON = new Color("#14110f");
+/** The space between the top of a sprite's head and its label, in board units. */
+const LABEL_GAP = 0.15;
 const MAX_PIXEL_RATIO = 2;
 /** The sun is high on the -x side, so a step casts its shadow to +x. */
 const SUN_DIRECTION = new Vector3(-0.55, 1, 0.3).normalize();
@@ -74,8 +80,16 @@ function showBoard(file: SceneFile): void {
   const board = createBoardMesh(file.board);
   scene.add(board);
 
+  // The view holds the board and the tallest sprite on its highest column. The
+  // box has the board's footprint, so the pan limit stays on the board.
   const box = new Box3().setFromObject(board);
+  box.max.y += MAX_HEIGHT * VOXEL;
   const view = new BoardCamera(box);
+
+  // The board hides a sprite behind it from a click.
+  const sprites = new SpriteLayer(file.board, [board]);
+  scene.add(sprites.group);
+  const label = new BoardLabel();
 
   scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
 
@@ -100,11 +114,6 @@ function showBoard(file: SceneFile): void {
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
 
-  // The board does not move, so the shadows are drawn once. A later change that
-  // moves a shadow caster must set `needsUpdate` again.
-  renderer.shadowMap.autoUpdate = false;
-  renderer.shadowMap.needsUpdate = true;
-
   let size = "";
   function draw(): void {
     const width = window.innerWidth;
@@ -121,6 +130,9 @@ function showBoard(file: SceneFile): void {
     // A turn draws again on each frame until it ends.
     // One clock: `rotate` stamps the turn with performance.now(), so does this.
     if (view.tick(performance.now())) requestDraw();
+    // The sprites turn with the camera, during a turn too, so they always face it.
+    sprites.face(view.azimuth);
+    label.place(view);
     renderer.render(scene, view.camera);
   }
 
@@ -138,7 +150,29 @@ function showBoard(file: SceneFile): void {
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
+
+  attachPress(canvas, controls, {
+    click(at) {
+      const id = sprites.spriteAt(view.ray(at.x, at.y));
+      const sprite = id === null ? undefined : sprites.get(id);
+      if (sprite) {
+        label.show(sprite.mesh, sprite.height + LABEL_GAP, sprite.spec.name);
+      } else {
+        label.hide();
+      }
+      requestDraw();
+    },
+  });
+
   draw();
+
+  // The board shows first. Each sprite stands on it when its image loads.
+  for (const spec of file.sprites) {
+    void loadSpriteVoxels(spec).then((voxels) => {
+      sprites.add(spec, voxels);
+      requestDraw();
+    });
+  }
 }
 
 async function main(): Promise<void> {

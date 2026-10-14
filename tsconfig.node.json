@@ -1,5 +1,5 @@
 {
-  // The tests and the tool configs: run by Node, never built.
+  // The tests, the tool configs and the scripts: run by Node, never built.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023"],
@@ -8,5 +8,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.test.ts", "vite.config.ts"]
+  "include": ["src/**/*.test.ts", "vite.config.ts", "scripts"]
 }

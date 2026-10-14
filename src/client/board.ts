@@ -17,14 +17,22 @@ export const GRID_LINE = 0.025;
 /** How much darker the grid line is than the top color. */
 const GRID_SHADE = 0.6;
 
-export interface BoardGeometryData {
+export type Vec3 = [number, number, number];
+
+/** The vertex data of a merged set of voxel faces. */
+export interface GeometryData {
   positions: number[];
   normals: number[];
   colors: number[];
   indices: number[];
 }
 
-type Vec3 = [number, number, number];
+/** The lighting of the board and of the sprites is the same. */
+export const VOXEL_MATERIAL = new MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.9,
+  metalness: 0,
+});
 
 /** The four sides of a square, by the direction of the neighbour square. */
 const SIDES = [
@@ -50,8 +58,8 @@ function heightAt(board: Board, x: number, z: number): number | undefined {
  * It leaves out the faces that cannot be seen: the bottoms, and each part of a
  * side face that is at or below the top of the neighbour column.
  */
-export function buildBoardGeometry(board: Board): BoardGeometryData {
-  const data: BoardGeometryData = {
+export function buildBoardGeometry(board: Board): GeometryData {
+  const data: GeometryData = {
     positions: [],
     normals: [],
     colors: [],
@@ -89,7 +97,18 @@ export function buildBoardGeometry(board: Board): BoardGeometryData {
 
 /** One mesh for the whole board, which casts and receives shadows. */
 export function createBoardMesh(board: Board): Mesh {
-  const data = buildBoardGeometry(board);
+  const mesh = new Mesh(
+    geometryFrom(buildBoardGeometry(board)),
+    VOXEL_MATERIAL,
+  );
+  mesh.name = "board";
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/** The geometry for vertex data. The bounds are made when something needs them. */
+export function geometryFrom(data: GeometryData): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute(
     "position",
@@ -98,24 +117,12 @@ export function createBoardMesh(board: Board): Mesh {
   geometry.setAttribute("normal", new Float32BufferAttribute(data.normals, 3));
   geometry.setAttribute("color", new Float32BufferAttribute(data.colors, 3));
   geometry.setIndex(data.indices);
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-
-  const material = new MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.9,
-    metalness: 0,
-  });
-  const mesh = new Mesh(geometry, material);
-  mesh.name = "board";
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+  return geometry;
 }
 
 /** The top face of a square: the top color, with a grid line on each edge. */
 function addTop(
-  data: BoardGeometryData,
+  data: GeometryData,
   x: number,
   z: number,
   y: number,
@@ -144,7 +151,7 @@ function addTop(
  * points: bottom left, bottom right, top right, top left.
  */
 function addSide(
-  data: BoardGeometryData,
+  data: GeometryData,
   x: number,
   z: number,
   { dx, dz }: (typeof SIDES)[number],
@@ -174,8 +181,8 @@ function addSide(
  * Adds a flat quad. Its corners must go counter-clockwise as seen from outside,
  * along `normal`, so that the front side faces `normal`.
  */
-function addQuad(
-  data: BoardGeometryData,
+export function addQuad(
+  data: GeometryData,
   corners: Vec3[],
   normal: Vec3,
   color: Color,

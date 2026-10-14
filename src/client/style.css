@@ -115,3 +115,26 @@ body {
 .error-panel li + li {
   margin-top: 4px;
 }
+
+.board-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  padding: 2px 10px;
+  border: 3px double var(--ink);
+  border-radius: 4px;
+  background: var(--parchment);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.board-label[hidden] {
+  display: none;
+}

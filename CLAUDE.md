@@ -13,21 +13,22 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 
 ## Layout
 
-| Path                       | What it is                                                                                                             |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `index.html`               | The page. Vite builds it with `src/client/main.ts`                                                                     |
-| `src/client/`              | The browser code                                                                                                       |
-| `src/server/`              | The Hono server. `app.ts` makes the app, `index.ts` starts it                                                          |
-| `src/shared/`              | Code that the client and the server both use, for example the scene validation                                         |
-| `public/`                  | Static files (scene files, sprite images). Vite copies them to `dist/client`                                           |
-| `dist/client`              | The built client (`vite build`)                                                                                        |
-| `dist/server`              | The built server (`tsc -p tsconfig.server.json`)                                                                       |
-| `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                           |
-| `tsconfig.json`            | The type check for the client and `src/shared`                                                                         |
-| `tsconfig.server.json`     | The type check and the build for the server and `src/shared`                                                           |
-| `tsconfig.node.json`       | The type check for the tests and `vite.config.ts`                                                                      |
-| `Dockerfile`               | The production image. It builds, then runs `node dist/server/index.js` with only the runtime packages                  |
-| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build` and a smoke test of the Docker image on each pull request and each push to `main` |
+| Path                       | What it is                                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`               | The page. Vite builds it with `src/client/main.ts`                                                                                             |
+| `src/client/`              | The browser code                                                                                                                               |
+| `src/server/`              | The Hono server. `app.ts` makes the app, `index.ts` starts it                                                                                  |
+| `src/shared/`              | Code that the client and the server both use, for example the scene validation                                                                 |
+| `public/`                  | Static files (scene files, sprite images). Vite copies them to `dist/client`                                                                   |
+| `scripts/sprites.ts`       | The starter sprites as rows of palette characters. It writes the PNGs in `public/sprites/`. Commit both. A test fails when their pixels differ |
+| `dist/client`              | The built client (`vite build`)                                                                                                                |
+| `dist/server`              | The built server (`tsc -p tsconfig.server.json`)                                                                                               |
+| `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                                                   |
+| `tsconfig.json`            | The type check for the client and `src/shared`                                                                                                 |
+| `tsconfig.server.json`     | The type check and the build for the server and `src/shared`                                                                                   |
+| `tsconfig.node.json`       | The type check for the tests, `vite.config.ts` and `scripts/`                                                                                  |
+| `Dockerfile`               | The production image. It builds, then runs `node dist/server/index.js` with only the runtime packages                                          |
+| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build` and a smoke test of the Docker image on each pull request and each push to `main`                         |
 
 - Put a package that the server uses at runtime in `dependencies`. Put all other packages in `devDependencies`. Vite bundles the client packages (for example `three`), so they are dev packages.
 - The server code uses Node ESM. A relative import in `src/server/` or `src/shared/` must end in `.js`.
@@ -46,6 +47,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 | `npm run format`       | Formats the files with Prettier                                                  |
 | `npm run format:check` | Checks the format with Prettier                                                  |
 | `npm test`             | Runs the Vitest tests                                                            |
+| `npm run sprites`      | Writes the starter sprite PNGs from `scripts/sprites.ts` (with `tsx`)            |
 
 In dev, Vite sends `/api` and `/healthz` to the server on port 3000.
 

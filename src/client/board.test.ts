@@ -1,11 +1,7 @@
 import { Color } from "three";
 import { describe, expect, it } from "vitest";
 import type { Board } from "../shared/scene.js";
-import {
-  buildBoardGeometry,
-  GRID_LINE,
-  type BoardGeometryData,
-} from "./board.js";
+import { buildBoardGeometry, GRID_LINE, type GeometryData } from "./board.js";
 
 const MATERIALS = {
   s: { name: "stone", top: "#ff0000", side: "#0000ff" },
@@ -27,7 +23,7 @@ interface Vertex {
   color: number[];
 }
 
-function vertices(data: BoardGeometryData): Vertex[] {
+function vertices(data: GeometryData): Vertex[] {
   return Array.from({ length: data.positions.length / 3 }, (_, i) => ({
     position: data.positions.slice(i * 3, i * 3 + 3),
     normal: data.normals.slice(i * 3, i * 3 + 3),
@@ -36,7 +32,7 @@ function vertices(data: BoardGeometryData): Vertex[] {
 }
 
 /** The vertices of the side faces in the plane x = 1, which turn to +x or -x. */
-function innerSide(data: BoardGeometryData): Vertex[] {
+function innerSide(data: GeometryData): Vertex[] {
   return vertices(data).filter(
     (v) => Math.abs(v.normal[0]) === 1 && v.position[0] === 1,
   );
