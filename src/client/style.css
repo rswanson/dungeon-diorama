@@ -2,6 +2,7 @@
   color-scheme: dark;
   --dungeon: #14110f;
   --parchment: #e8dcc0;
+  --parchment-light: #f3ead4;
   --ink: #3a2a1c;
 }
 
@@ -67,7 +68,7 @@ body {
 }
 
 .hud button:hover {
-  background: #f3ead4;
+  background: var(--parchment-light);
 }
 
 .hud button:active {

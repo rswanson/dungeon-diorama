@@ -25,6 +25,14 @@ export interface Point {
   y: number;
 }
 
+/** What `attachCameraControls` gives back. */
+export interface CameraControls {
+  /** The touch pointers now on the canvas. */
+  readonly touchCount: number;
+  /** Starts a quarter turn of the view, and draws it. */
+  turn(dir: 1 | -1): void;
+}
+
 /**
  * Lets the player pan, zoom and turn the view with the mouse, a trackpad, the
  * keyboard and touch. A press of the primary button, or one finger, does
@@ -34,12 +42,18 @@ export function attachCameraControls(
   canvas: HTMLCanvasElement,
   view: BoardCamera,
   requestDraw: () => void,
-): void {
+): CameraControls {
   /** The right or the middle button drag that pans, with the `buttons` bit of its button. */
   let drag: (Point & { id: number; bit: number }) | null = null;
   /** Each touch pointer on the canvas. Two of them pan and pinch. */
   const touches = new Map<number, Point>();
   let gestureScale = 1;
+
+  /** Ends the pan drag of this pointer and lets go of the pointer. */
+  const endDrag = (id: number): void => {
+    drag = null;
+    if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  };
 
   const local = (e: { clientX: number; clientY: number }): Point =>
     canvasPoint(canvas, e.clientX, e.clientY);
@@ -63,23 +77,20 @@ export function attachCameraControls(
   });
 
   canvas.addEventListener("pointermove", (e) => {
-    const at = local(e);
     if (drag?.id === e.pointerId) {
       // The pan ends with its own button, even when another button is still down.
       if (!(e.buttons & drag.bit)) {
-        drag = null;
-        if (canvas.hasPointerCapture(e.pointerId)) {
-          canvas.releasePointerCapture(e.pointerId);
-        }
+        endDrag(e.pointerId);
         return;
       }
-      view.pan(at.x - drag.x, at.y - drag.y);
+      const at = local(e);
+      if (view.pan(at.x - drag.x, at.y - drag.y)) requestDraw();
       Object.assign(drag, at);
-      requestDraw();
       return;
     }
     const touch = touches.get(e.pointerId);
     if (!touch) return;
+    const at = local(e);
     if (touches.size !== 2) {
       Object.assign(touch, at);
       return;
@@ -87,14 +98,15 @@ export function attachCameraControls(
     const before = pair(touches);
     Object.assign(touch, at);
     const after = pair(touches);
-    view.pan(after.x - before.x, after.y - before.y);
-    if (before.span > 0)
+    const panned = view.pan(after.x - before.x, after.y - before.y);
+    const zoomed =
+      before.span > 0 &&
       view.zoomAt(after.span / before.span, after.x, after.y);
-    requestDraw();
+    if (panned || zoomed) requestDraw();
   });
 
   const release = (e: PointerEvent): void => {
-    if (drag?.id === e.pointerId) drag = null;
+    if (drag?.id === e.pointerId) endDrag(e.pointerId);
     touches.delete(e.pointerId);
   };
   canvas.addEventListener("pointerup", release);
@@ -108,22 +120,20 @@ export function attachCameraControls(
     (e) => {
       // The page must not scroll or zoom.
       e.preventDefault();
-      const unit =
-        e.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? LINE_PX
-          : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? PAGE_PX
-            : 1;
+      // `deltaMode` is 0 for pixels, 1 for lines and 2 for pages.
+      const unit = [1, LINE_PX, PAGE_PX][e.deltaMode] ?? 1;
       const rate = e.ctrlKey ? PINCH_ZOOM : WHEEL_ZOOM;
       const at = local(e);
-      view.zoomAt(Math.exp(-e.deltaY * unit * rate), at.x, at.y);
-      requestDraw();
+      if (view.zoomAt(Math.exp(-e.deltaY * unit * rate), at.x, at.y)) {
+        requestDraw();
+      }
     },
     { passive: false },
   );
 
   // Safari on a Mac sends a trackpad pinch as gesture events. Safari on an
-  // iPad sends them too, with the touch pointers, which already pinch.
+  // iPad sends them too, with the touch pointers, which already pinch. The
+  // state resets on gesturestart, so there is no gestureend listener.
   canvas.addEventListener("gesturestart", (e) => {
     e.preventDefault();
     gestureScale = 1;
@@ -133,12 +143,14 @@ export function attachCameraControls(
     const gesture = e as GestureEvent;
     if (touches.size === 0 && gestureScale > 0) {
       const at = local(gesture);
-      view.zoomAt(gesture.scale / gestureScale, at.x, at.y);
-      requestDraw();
+      if (view.zoomAt(gesture.scale / gestureScale, at.x, at.y)) requestDraw();
     }
     gestureScale = gesture.scale;
   });
-  canvas.addEventListener("gestureend", (e) => e.preventDefault());
+
+  const turn = (dir: 1 | -1): void => {
+    if (view.rotate(dir)) requestDraw();
+  };
 
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -147,8 +159,15 @@ export function attachCameraControls(
     e.preventDefault();
     // A held key repeats. One press makes one turn.
     if (e.repeat) return;
-    if (view.rotate(dir)) requestDraw();
+    turn(dir);
   });
+
+  return {
+    get touchCount() {
+      return touches.size;
+    },
+    turn,
+  };
 }
 
 /**

@@ -11,8 +11,8 @@ export interface Square {
 /** The top of the highest column a board can have (height 9). */
 const HIGHEST = columnTop(9);
 
-/** A ray this close to a column's top edge only touches it. Rounding puts such a ray a little under or over the edge. */
-const TOUCH = 1e-6;
+/** Absorbs floating-point rounding at grid corners, where a ray can end a hair under a top it only touches. */
+const TOUCH = 1e-12;
 
 /**
  * The square of the first column that `ray` hits, on its top or on a side, or
@@ -62,7 +62,14 @@ export function pickSquare(board: Board, ray: Ray): Square | null {
     if (Math.min(o.y + d.y * t, o.y + d.y * leave) < top - TOUCH)
       return { x, z };
     if (leave >= exit) return null;
-    if (nextX < nextZ) {
+    if (nextX === nextZ) {
+      // A ray through a grid corner leaves both cells at once.
+      x += stepX;
+      z += stepZ;
+      t = nextX;
+      nextX += gapX;
+      nextZ += gapZ;
+    } else if (nextX < nextZ) {
       x += stepX;
       t = nextX;
       nextX += gapX;

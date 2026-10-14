@@ -111,8 +111,9 @@ function showBoard(file: SceneFile): void {
     const height = window.innerHeight;
     // Browser zoom or a move to another display changes the ratio.
     const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
-    if (`${width}x${height}@${ratio}` !== size) {
-      size = `${width}x${height}@${ratio}`;
+    const key = `${width}x${height}@${ratio}`;
+    if (key !== size) {
+      size = key;
       if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
       renderer.setSize(width, height, false);
       view.resize(width, height);
@@ -134,8 +135,8 @@ function showBoard(file: SceneFile): void {
   }
 
   window.addEventListener("resize", requestDraw);
-  attachCameraControls(canvas, view, requestDraw);
-  showTurnButtons(view, requestDraw);
+  const controls = attachCameraControls(canvas, view, requestDraw);
+  showTurnButtons(controls.turn);
   draw(performance.now());
 }
 

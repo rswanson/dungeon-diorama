@@ -90,7 +90,11 @@ export class BoardCamera {
   /** The quarter turns of the camera from the start. The current turn ends there. */
   private turns = 0;
   private angle = azimuthOf(0);
+  /** The quarter turns when the running turn started, or now when no turn runs. */
+  private settled = 0;
   private turn: { from: number; start: number } | null = null;
+  private readonly raycaster = new Raycaster();
+  private readonly ndc = new Vector2();
 
   constructor(box: Box3) {
     this.box = box.clone();
@@ -134,9 +138,7 @@ export class BoardCamera {
    */
   rotate(dir: 1 | -1, now = performance.now()): boolean {
     const turns = this.turns + dir;
-    if (Math.abs(azimuthOf(turns) - this.angle) > 2 * TURN_STEP + 1e-9) {
-      return false;
-    }
+    if (Math.abs(turns - this.settled) > 2) return false;
     this.turns = turns;
     this.turn = { from: this.angle, start: now };
     return true;
@@ -150,6 +152,7 @@ export class BoardCamera {
     if (t >= 1) {
       this.angle = end;
       this.turn = null;
+      this.settled = this.turns;
     } else {
       this.angle = MathUtils.lerp(this.turn.from, end, easeTurn(t));
     }
@@ -159,65 +162,60 @@ export class BoardCamera {
 
   /**
    * Moves the view so that the board moves `dx`, `dy` CSS pixels on the
-   * screen. The target stays above the board.
+   * screen. The target stays above the board. It returns true when the target
+   * moved.
    */
-  pan(dx: number, dy: number): void {
-    const units = this.unitsPerPixel();
-    const right = new Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-    const ahead = new Vector3()
-      .setFromMatrixColumn(this.camera.matrixWorld, 2)
-      .negate()
-      .setY(0)
-      .normalize();
-    // A step on the ground away from the camera is shorter on the screen by sin(ELEVATION).
-    this.target
-      .addScaledVector(right, -dx * units)
-      .addScaledVector(ahead, (dy * units) / Math.sin(ELEVATION));
-    this.target.x = MathUtils.clamp(
-      this.target.x,
-      this.box.min.x,
-      this.box.max.x,
-    );
-    this.target.z = MathUtils.clamp(
-      this.target.z,
-      this.box.min.z,
-      this.box.max.z,
-    );
+  pan(dx: number, dy: number): boolean {
+    const { x, z } = this.target;
+    this.shift(dx, dy);
+    this.box.clampPoint(this.target, this.target);
+    if (this.target.x === x && this.target.z === z) return false;
     this.place(this.angle);
+    return true;
   }
 
   /**
    * Multiplies the zoom by `factor`, within its limits. The board point at
    * `x`, `y` (CSS pixels from the top left of the view) stays at that place.
+   * It returns true when the zoom or the target changed.
    */
-  zoomAt(factor: number, x: number, y: number): void {
+  zoomAt(factor: number, x: number, y: number): boolean {
     const zoom = MathUtils.clamp(
       this.camera.zoom * factor,
       MIN_ZOOM,
       maxZoom(this.camera),
     );
+    if (zoom === this.camera.zoom) return false;
     const keep = 1 - this.camera.zoom / zoom;
-    this.pan(-(x - this.width / 2) * keep, (this.height / 2 - y) * keep);
+    const { x: tx, z: tz } = this.target;
+    // The shift uses the board units of one pixel at the old zoom.
+    this.shift(-(x - this.width / 2) * keep, (this.height / 2 - y) * keep);
+    this.box.clampPoint(this.target, this.target);
     this.camera.zoom = zoom;
     this.camera.updateProjectionMatrix();
+    if (this.target.x !== tx || this.target.z !== tz) this.place(this.angle);
+    return true;
   }
 
-  /** The ray from the camera through `x`, `y` (CSS pixels from the top left of the view). */
+  /** The ray from the camera through `x`, `y` (CSS pixels from the top left of the view). The ray is shared: it is valid until the next call. */
   ray(x: number, y: number): Ray {
-    const ndc = new Vector2(
-      (x / this.width) * 2 - 1,
-      1 - (y / this.height) * 2,
-    );
-    const raycaster = new Raycaster();
-    raycaster.setFromCamera(ndc, this.camera);
-    return raycaster.ray;
+    this.ndc.set((x / this.width) * 2 - 1, 1 - (y / this.height) * 2);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    return this.raycaster.ray;
   }
 
-  /** The board units in one CSS pixel. */
-  private unitsPerPixel(): number {
-    return (
-      (this.camera.right - this.camera.left) / this.camera.zoom / this.width
-    );
+  /** Moves the target on the ground so that the board moves `dx`, `dy` CSS pixels on the screen. It does not clamp or place the camera. */
+  private shift(dx: number, dy: number): void {
+    const units =
+      (this.camera.right - this.camera.left) / this.camera.zoom / this.width;
+    const sin = Math.sin(this.angle);
+    const cos = Math.cos(this.angle);
+    // The camera stands at (sin, cos) of the angle from the target, so on the
+    // ground "right" on the screen is (cos, -sin) and "ahead" is (-sin, -cos).
+    // A step on the ground away from the camera is shorter on the screen by sin(ELEVATION).
+    const ahead = (dy * units) / Math.sin(ELEVATION);
+    this.target.x += -dx * units * cos - ahead * sin;
+    this.target.z += dx * units * sin - ahead * cos;
   }
 
   private place(azimuth: number): void {
