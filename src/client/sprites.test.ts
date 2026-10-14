@@ -123,6 +123,8 @@ describe("SpriteLayer", () => {
     expect(box.max.y).toBeCloseTo(columnTop(3) + VOXEL);
     expect(box.getCenter(new Vector3()).x).toBeCloseTo(1.5);
     expect(box.getCenter(new Vector3()).z).toBeCloseTo(0.5);
+    expect(mesh.castShadow).toBe(true);
+    expect(mesh.receiveShadow).toBe(true);
   });
 
   it("faces the camera after each quarter turn", () => {
