@@ -21,7 +21,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B2: Demo board from the scene file
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** The page shows the demo board: a 16x12 grid of voxel columns with height changes and four materials, grid lines on the tops, one sun light with shadows, in a fixed isometric view.
 - **Acceptance criteria:**
   1. `public/scenes/demo.json` follows the spec's scene format: 16x12, heights 0–9 used with steps and ledges, materials stone, grass, dirt, water.
@@ -35,7 +35,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B3: Camera controls
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** The player pans, zooms and rotates the board in 90° steps with mouse, keyboard, on-screen buttons or touch.
 - **Acceptance criteria:**
   1. Right-drag and middle-drag pan on desktop; two-finger drag pans on touch.
