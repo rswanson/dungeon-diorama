@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { Box3, Ray, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { renderSprites } from "../../scripts/sprites.mjs";
+import { spritePixels, type SpritePixels } from "../../scripts/sprites.js";
 import { parseScene, type Board, type SpriteSpec } from "../shared/scene.js";
 import { columnTop, createBoardMesh } from "./board.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
@@ -15,7 +15,8 @@ import {
 } from "./sprites.js";
 
 const PUBLIC = new URL("../../public/", import.meta.url);
-const STARTERS = ["fighter", "wizard", "rogue", "cleric", "goblin", "orc"];
+const PIXELS = spritePixels();
+const STARTERS = Object.keys(PIXELS);
 
 /** RGBA bytes for rows of "#" (opaque red) and "." (transparent). */
 function image(rows: string[]): number[] {
@@ -72,6 +73,32 @@ describe("buildSpriteGeometry", () => {
     }
   });
 
+  it("winds every triangle so that its front side faces its normal", () => {
+    const data = buildSpriteGeometry({
+      width: 2,
+      voxels: voxelsFromPixels(2, 1, image(["##"])),
+    });
+    const point = (i: number) => data.positions.slice(i * 3, i * 3 + 3);
+    expect(data.indices.length).toBeGreaterThan(0);
+    for (let t = 0; t < data.indices.length; t += 3) {
+      const [a, b, c] = [t, t + 1, t + 2].map((k) => point(data.indices[k]));
+      const ab = b.map((n, i) => n - a[i]);
+      const ac = c.map((n, i) => n - a[i]);
+      const cross = [
+        ab[1] * ac[2] - ab[2] * ac[1],
+        ab[2] * ac[0] - ab[0] * ac[2],
+        ab[0] * ac[1] - ab[1] * ac[0],
+      ];
+      const n = data.normals.slice(
+        data.indices[t] * 3,
+        data.indices[t] * 3 + 3,
+      );
+      expect(
+        cross[0] * n[0] + cross[1] * n[1] + cross[2] * n[2],
+      ).toBeGreaterThan(0);
+    }
+  });
+
   it("leaves out the faces between two neighbour pixels", () => {
     const one = buildSpriteGeometry({
       width: 1,
@@ -110,7 +137,7 @@ describe("SpriteLayer", () => {
       view.rotate(dir, now);
       now += TURN_MS;
       view.tick(now);
-      expect(layer.face(view.azimuth)).toBe(true);
+      layer.face(view.azimuth);
       // The front of the slab (+z) points to the camera on the ground.
       const front = new Vector3(0, 0, 1).transformDirection(mesh.matrixWorld);
       const toCamera = view.camera.position
@@ -120,7 +147,6 @@ describe("SpriteLayer", () => {
         .normalize();
       expect(front.dot(toCamera)).toBeCloseTo(1);
     }
-    expect(layer.face(view.azimuth)).toBe(false);
   });
 });
 
@@ -173,30 +199,47 @@ describe("fitsSprite", () => {
   });
 });
 
-describe("the starter sprites", () => {
-  it("are 16x24 RGBA PNGs that stand on their bottom row", () => {
-    for (const name of STARTERS) {
-      const png = readFileSync(new URL(`sprites/${name}.png`, PUBLIC));
-      // The IHDR chunk follows the 8-byte signature and its length and type.
-      expect(png.readUInt32BE(16), name).toBe(16);
-      expect(png.readUInt32BE(20), name).toBe(24);
-      expect([png[24], png[25]], name).toEqual([8, 6]);
-      // One IDAT chunk; each row is a filter byte and 16 RGBA pixels.
-      const length = png.readUInt32BE(33);
-      expect(png.toString("ascii", 37, 41)).toBe("IDAT");
-      const raw = inflateSync(png.subarray(41, 41 + length));
-      expect(raw.length, name).toBe(24 * (1 + 16 * 4));
-      const bottom = raw.subarray(23 * 65 + 1, 24 * 65);
-      expect(bottom.some((_, i) => i % 4 === 3 && bottom[i] >= 128)).toBe(true);
+/** The pixels of an 8-bit RGBA PNG whose rows have no filter, as the generator writes it. */
+function decodePng(png: Buffer): SpritePixels {
+  let size = { width: 0, height: 0 };
+  const data: Buffer[] = [];
+  // After the 8-byte signature, each chunk is a length, a type, data and a CRC.
+  for (let at = 8; at < png.length;) {
+    const length = png.readUInt32BE(at);
+    const type = png.toString("ascii", at + 4, at + 8);
+    const body = png.subarray(at + 8, at + 8 + length);
+    if (type === "IHDR") {
+      size = { width: body.readUInt32BE(0), height: body.readUInt32BE(4) };
+      expect([body[8], body[9]], "bit depth and color type").toEqual([8, 6]);
     }
+    if (type === "IDAT") data.push(body);
+    at += 12 + length;
+  }
+  const { width, height } = size;
+  const raw = inflateSync(Buffer.concat(data));
+  const stride = 1 + width * 4;
+  expect(raw.length).toBe(height * stride);
+  const rows = Array.from({ length: height }, (_, y) => {
+    expect(raw[y * stride], `filter of row ${y}`).toBe(0);
+    return raw.subarray(y * stride + 1, (y + 1) * stride);
   });
+  return { width, height, rgba: Buffer.concat(rows) };
+}
 
-  it("are the PNGs that scripts/sprites.mjs makes", () => {
-    const made = renderSprites();
-    expect(Object.keys(made).sort()).toEqual([...STARTERS].sort());
-    for (const [name, png] of Object.entries(made)) {
+describe("the starter sprites", () => {
+  it("are the 16x24 PNGs that scripts/sprites.ts makes, standing on their bottom row", () => {
+    for (const [name, made] of Object.entries(PIXELS)) {
       const file = readFileSync(new URL(`sprites/${name}.png`, PUBLIC));
-      expect(png.equals(file), `${name}.png: run npm run sprites`).toBe(true);
+      const { width, height, rgba } = decodePng(file);
+      expect([width, height], name).toEqual([16, 24]);
+      expect(rgba.equals(made.rgba), `${name}.png: run npm run sprites`).toBe(
+        true,
+      );
+      const bottom = rgba.subarray((height - 1) * width * 4);
+      expect(
+        bottom.some((_, i) => i % 4 === 3 && bottom[i] >= 128),
+        name,
+      ).toBe(true);
     }
   });
 

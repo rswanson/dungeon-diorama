@@ -1,18 +1,21 @@
 import {
-  BufferGeometry,
   Color,
-  Float32BufferAttribute,
   Group,
   Mesh,
-  MeshStandardMaterial,
   Raycaster,
   SRGBColorSpace,
-  Vector3,
   type Object3D,
   type Ray,
 } from "three";
 import type { Board, SpriteSpec } from "../shared/scene.js";
-import { columnTop } from "./board.js";
+import {
+  addQuad,
+  columnTop,
+  geometryFrom,
+  VOXEL_MATERIAL,
+  type GeometryData,
+  type Vec3,
+} from "./board.js";
 
 // A sprite is pixel art made into a thin slab of voxels. It stands on the top
 // of its square's column, and its front turns to the camera.
@@ -27,7 +30,7 @@ export const DEPTH = 2;
 /** A pixel with less alpha than this is empty. */
 const OPAQUE = 128;
 /** The color and the size of the block that stands in for a sprite whose image did not load. */
-const FALLBACK_COLOR = "#ff00ff";
+const FALLBACK_RGB: Voxel["rgb"] = [255, 0, 255];
 const FALLBACK_WIDTH = 16;
 const FALLBACK_HEIGHT = 24;
 
@@ -48,15 +51,6 @@ export interface SpriteVoxels {
   width: number;
   voxels: Voxel[];
 }
-
-export interface SpriteGeometryData {
-  positions: number[];
-  normals: number[];
-  colors: number[];
-  indices: number[];
-}
-
-type Vec3 = [number, number, number];
 
 /** True when an image of this size can be a sprite. */
 export function fitsSprite(width: number, height: number): boolean {
@@ -90,76 +84,45 @@ export function voxelsFromPixels(
 
 /** The magenta block that stands in for a sprite whose image did not load. */
 export function fallbackVoxels(): SpriteVoxels {
-  const color = new Color(FALLBACK_COLOR);
-  const rgb = [color.r, color.g, color.b].map((c) => Math.round(c * 255));
-  const rgba: number[] = [];
-  for (let i = 0; i < FALLBACK_WIDTH * FALLBACK_HEIGHT; i++) {
-    rgba.push(rgb[0], rgb[1], rgb[2], 255);
+  const voxels: Voxel[] = [];
+  for (let y = 0; y < FALLBACK_HEIGHT; y++) {
+    for (let x = 0; x < FALLBACK_WIDTH; x++) {
+      for (let z = 0; z < DEPTH; z++) {
+        voxels.push({ x, y, z, rgb: FALLBACK_RGB });
+      }
+    }
   }
-  return {
-    width: FALLBACK_WIDTH,
-    voxels: voxelsFromPixels(FALLBACK_WIDTH, FALLBACK_HEIGHT, rgba),
-  };
+  return { width: FALLBACK_WIDTH, voxels };
 }
 
-/** The six faces of a voxel, by the direction of the neighbour voxel. */
-const FACES: { dir: Vec3; corners: Vec3[] }[] = [
-  // Each face lists its corners in the unit cube, counter-clockwise as seen from outside.
-  {
-    dir: [1, 0, 0],
-    corners: [
-      [1, 0, 1],
-      [1, 0, 0],
-      [1, 1, 0],
-      [1, 1, 1],
-    ],
-  },
-  {
-    dir: [-1, 0, 0],
-    corners: [
-      [0, 0, 0],
-      [0, 0, 1],
-      [0, 1, 1],
-      [0, 1, 0],
-    ],
-  },
-  {
-    dir: [0, 1, 0],
-    corners: [
-      [0, 1, 1],
-      [1, 1, 1],
-      [1, 1, 0],
-      [0, 1, 0],
-    ],
-  },
-  {
-    dir: [0, -1, 0],
-    corners: [
-      [0, 0, 0],
-      [1, 0, 0],
-      [1, 0, 1],
-      [0, 0, 1],
-    ],
-  },
-  {
-    dir: [0, 0, 1],
-    corners: [
-      [0, 0, 1],
-      [1, 0, 1],
-      [1, 1, 1],
-      [0, 1, 1],
-    ],
-  },
-  {
-    dir: [0, 0, -1],
-    corners: [
-      [1, 0, 0],
-      [0, 0, 0],
-      [0, 1, 0],
-      [1, 1, 0],
-    ],
-  },
-];
+/**
+ * The six faces of a voxel: the face on the + side and the face on the - side
+ * of each axis. Each lists its corners in the unit cube, counter-clockwise as
+ * seen from outside: (u, v) in the order (0, 0), (1, 0), (1, 1), (0, 1) on the
+ * + side, where u and v are the next two axes, and the reverse on the - side.
+ */
+const FACES = [0, 1, 2].flatMap((axis) =>
+  ([1, -1] as const).map((sign) => {
+    const [u, v] = [(axis + 1) % 3, (axis + 2) % 3];
+    const dir: Vec3 = [0, 0, 0];
+    dir[axis] = sign;
+    const corners = (
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ] as const
+    ).map(([cu, cv]) => {
+      const corner: Vec3 = [0, 0, 0];
+      corner[axis] = sign > 0 ? 1 : 0;
+      corner[u] = cu;
+      corner[v] = cv;
+      return corner;
+    });
+    return { dir, corners: sign > 0 ? corners : corners.reverse() };
+  }),
+);
 
 /**
  * One merged set of faces for a sprite, in board units. The slab is centered
@@ -169,8 +132,8 @@ const FACES: { dir: Vec3; corners: Vec3[] }[] = [
 export function buildSpriteGeometry({
   width,
   voxels,
-}: SpriteVoxels): SpriteGeometryData {
-  const data: SpriteGeometryData = {
+}: SpriteVoxels): GeometryData {
+  const data: GeometryData = {
     positions: [],
     normals: [],
     colors: [],
@@ -189,23 +152,15 @@ export function buildSpriteGeometry({
     );
     for (const { dir, corners } of FACES) {
       if (filled.has(key(v.x + dir[0], v.y + dir[1], v.z + dir[2]))) continue;
-      const start = data.positions.length / 3;
-      for (const [cx, cy, cz] of corners) {
-        data.positions.push(
+      addQuad(
+        data,
+        corners.map(([cx, cy, cz]) => [
           (v.x + cx - width / 2) * VOXEL,
           (v.y + cy) * VOXEL,
           (v.z + cz - DEPTH / 2) * VOXEL,
-        );
-        data.normals.push(...dir);
-        data.colors.push(color.r, color.g, color.b);
-      }
-      data.indices.push(
-        start,
-        start + 1,
-        start + 2,
-        start,
-        start + 2,
-        start + 3,
+        ]),
+        dir,
+        color,
       );
     }
   }
@@ -224,19 +179,6 @@ export interface PlacedSprite {
   /** The height of the sprite above its column top, in board units. */
   height: number;
 }
-
-/** The top of a sprite's head, on its vertical axis. */
-export function headOf(sprite: PlacedSprite, target: Vector3): Vector3 {
-  const { position } = sprite.mesh;
-  return target.copy(position).setY(position.y + sprite.height);
-}
-
-/** The lighting of the sprites is the same as the board's. */
-const MATERIAL = new MeshStandardMaterial({
-  vertexColors: true,
-  roughness: 0.9,
-  metalness: 0,
-});
 
 /**
  * The sprites on the board. Each one is one mesh that casts and receives
@@ -259,22 +201,8 @@ export class SpriteLayer {
   /** Puts a sprite on its square. It replaces a sprite with the same id. */
   add(spec: SpriteSpec, voxels: SpriteVoxels): PlacedSprite {
     this.remove(spec.id);
-    const data = buildSpriteGeometry(voxels);
-    const geometry = new BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(data.positions, 3),
-    );
-    geometry.setAttribute(
-      "normal",
-      new Float32BufferAttribute(data.normals, 3),
-    );
-    geometry.setAttribute("color", new Float32BufferAttribute(data.colors, 3));
-    geometry.setIndex(data.indices);
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-
-    const mesh = new Mesh(geometry, MATERIAL);
+    const geometry = geometryFrom(buildSpriteGeometry(voxels));
+    const mesh = new Mesh(geometry, VOXEL_MATERIAL);
     mesh.name = `sprite:${spec.id}`;
     mesh.userData.spriteId = spec.id;
     mesh.castShadow = true;
@@ -300,16 +228,15 @@ export class SpriteLayer {
 
   /**
    * Turns every sprite to face a camera at this azimuth (the camera angle
-   * around the board). It returns true when a sprite turned.
+   * around the board).
    */
-  face(azimuth: number): boolean {
-    if (azimuth === this.yaw) return false;
+  face(azimuth: number): void {
+    if (azimuth === this.yaw) return;
     this.yaw = azimuth;
     for (const { mesh } of this.sprites.values()) {
       mesh.rotation.y = azimuth;
       mesh.updateMatrixWorld();
     }
-    return this.sprites.size > 0;
   }
 
   /** The id of the first sprite that `ray` hits, or null when it hits none or hits an occluder first. */

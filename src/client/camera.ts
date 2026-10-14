@@ -95,6 +95,7 @@ export class BoardCamera {
   private turn: { from: number; start: number } | null = null;
   private readonly raycaster = new Raycaster();
   private readonly ndc = new Vector2();
+  private readonly projected = new Vector3();
 
   constructor(box: Box3) {
     this.box = box.clone();
@@ -202,6 +203,18 @@ export class BoardCamera {
     this.ndc.set((x / this.width) * 2 - 1, 1 - (y / this.height) * 2);
     this.raycaster.setFromCamera(this.ndc, this.camera);
     return this.raycaster.ray;
+  }
+
+  /**
+   * The place of the board point `world` in the view, in CSS pixels from the
+   * top left. It is the reverse of `ray`. `out` receives the result when given.
+   */
+  screenPoint(world: Vector3, out = new Vector2()): Vector2 {
+    this.projected.copy(world).project(this.camera);
+    return out.set(
+      ((this.projected.x + 1) / 2) * this.width,
+      ((1 - this.projected.y) / 2) * this.height,
+    );
   }
 
   /** Moves the target on the ground so that the board moves `dx`, `dy` CSS pixels on the screen. It does not clamp or place the camera. */

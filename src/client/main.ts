@@ -22,7 +22,7 @@ import { showTurnButtons } from "./hud.js";
 import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
 import { attachPress } from "./select.js";
-import { headOf, MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
+import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
 
 const DUNGEON = new Color("#14110f");
@@ -114,11 +114,6 @@ function showBoard(file: SceneFile): void {
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
 
-  // The shadows are drawn only after a change. A change that moves a shadow
-  // caster (a new sprite, or a sprite that turns) sets `needsUpdate` again.
-  renderer.shadowMap.autoUpdate = false;
-  renderer.shadowMap.needsUpdate = true;
-
   let size = "";
   function draw(): void {
     const width = window.innerWidth;
@@ -136,8 +131,8 @@ function showBoard(file: SceneFile): void {
     // One clock: `rotate` stamps the turn with performance.now(), so does this.
     if (view.tick(performance.now())) requestDraw();
     // The sprites turn with the camera, during a turn too, so they always face it.
-    if (sprites.face(view.azimuth)) renderer.shadowMap.needsUpdate = true;
-    label.place(view.camera, width, height);
+    sprites.face(view.azimuth);
+    label.place(view);
     renderer.render(scene, view.camera);
   }
 
@@ -161,8 +156,7 @@ function showBoard(file: SceneFile): void {
       const id = sprites.spriteAt(view.ray(at.x, at.y));
       const sprite = id === null ? undefined : sprites.get(id);
       if (sprite) {
-        const head = headOf(sprite, new Vector3());
-        label.show(sprite.spec.name, head.setY(head.y + LABEL_GAP));
+        label.show(sprite.mesh, sprite.height + LABEL_GAP, sprite.spec.name);
       } else {
         label.hide();
       }
@@ -176,7 +170,6 @@ function showBoard(file: SceneFile): void {
   for (const spec of file.sprites) {
     void loadSpriteVoxels(spec).then((voxels) => {
       sprites.add(spec, voxels);
-      renderer.shadowMap.needsUpdate = true;
       requestDraw();
     });
   }

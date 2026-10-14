@@ -1,17 +1,30 @@
-// Makes the starter sprites as 16x24 PNGs. Run as a script, it writes them to
-// public/sprites/. A test imports `renderSprites` and compares its bytes with
-// those files.
+// Makes the starter sprites as 16x24 PNGs. Run as a script (`tsx`), it writes
+// them to public/sprites/. A test imports `spritePixels` and compares its
+// pixels with those files.
 // Each sprite is rows of palette characters. "." is a transparent pixel.
 // Run it with `npm run sprites` after a change to the art.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { deflateSync } from "node:zlib";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 
 const WIDTH = 16;
 const HEIGHT = 24;
-const SCRIPT = fileURLToPath(import.meta.url);
-const OUT = join(dirname(SCRIPT), "../public/sprites");
+const OUT = join(import.meta.dirname, "../public/sprites");
+
+interface SpriteArt {
+  /** The color of each palette character, as "#rrggbb". */
+  palette: Record<string, string>;
+  /** `HEIGHT` rows of `WIDTH` palette characters. */
+  rows: string[];
+}
+
+/** The decoded pixels of a sprite: 4 bytes for each pixel, row by row from the top. */
+export interface SpritePixels {
+  width: number;
+  height: number;
+  rgba: Buffer;
+}
 
 /** The colors that all sprites share. */
 const BASE = {
@@ -20,7 +33,7 @@ const BASE = {
   b: "#6b4a2b", // wood and leather
 };
 
-const SPRITES = {
+const SPRITES: Record<string, SpriteArt> = {
   fighter: {
     palette: {
       ...BASE,
@@ -254,7 +267,7 @@ const SPRITES = {
 };
 
 /** The RGBA bytes of a sprite. It throws on a row of the wrong size or an unknown character. */
-function pixels(name, { palette, rows }) {
+function pixels(name: string, { palette, rows }: SpriteArt): Buffer {
   if (rows.length !== HEIGHT) {
     throw new Error(`${name}: ${rows.length} rows, not ${HEIGHT}.`);
   }
@@ -275,19 +288,7 @@ function pixels(name, { palette, rows }) {
   return rgba;
 }
 
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-
-function crc32(bytes) {
-  let c = 0xffffffff;
-  for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
+function chunk(type: string, data: Buffer): Buffer {
   const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
   const length = Buffer.alloc(4);
   length.writeUInt32BE(data.length);
@@ -297,7 +298,7 @@ function chunk(type, data) {
 }
 
 /** A PNG of 8-bit RGBA pixels, with no filter on each row. */
-function encodePng(width, height, rgba) {
+function encodePng({ width, height, rgba }: SpritePixels): Buffer {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
@@ -315,12 +316,22 @@ function encodePng(width, height, rgba) {
   ]);
 }
 
-/** The PNG bytes of each starter sprite, by id. */
-export function renderSprites() {
+/** The decoded pixels of each starter sprite, by id. */
+export function spritePixels(): Record<string, SpritePixels> {
   return Object.fromEntries(
-    Object.entries(SPRITES).map(([name, sprite]) => [
+    Object.entries(SPRITES).map(([name, art]) => [
       name,
-      encodePng(WIDTH, HEIGHT, pixels(name, sprite)),
+      { width: WIDTH, height: HEIGHT, rgba: pixels(name, art) },
+    ]),
+  );
+}
+
+/** The PNG bytes of each starter sprite, by id. */
+export function renderSprites(): Record<string, Buffer> {
+  return Object.fromEntries(
+    Object.entries(spritePixels()).map(([name, sprite]) => [
+      name,
+      encodePng(sprite),
     ]),
   );
 }

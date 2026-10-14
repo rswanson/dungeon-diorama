@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.2"
   },
   "scripts": {
     "dev": "concurrently --kill-others --names server,client \"tsx watch src/server/index.ts\" \"vite\"",
@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "sprites": "node scripts/sprites.mjs"
+    "sprites": "tsx scripts/sprites.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
