@@ -20,6 +20,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 | `src/server/`              | The Hono server. `app.ts` makes the app, `index.ts` starts it                                                          |
 | `src/shared/`              | Code that the client and the server both use, for example the scene validation                                         |
 | `public/`                  | Static files (scene files, sprite images). Vite copies them to `dist/client`                                           |
+| `scripts/sprites.mjs`      | The starter sprites as rows of palette characters. It writes the PNGs in `public/sprites/`. Commit both                |
 | `dist/client`              | The built client (`vite build`)                                                                                        |
 | `dist/server`              | The built server (`tsc -p tsconfig.server.json`)                                                                       |
 | `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                           |
@@ -46,6 +47,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 | `npm run format`       | Formats the files with Prettier                                                  |
 | `npm run format:check` | Checks the format with Prettier                                                  |
 | `npm test`             | Runs the Vitest tests                                                            |
+| `npm run sprites`      | Writes the starter sprite PNGs from `scripts/sprites.mjs`                        |
 
 In dev, Vite sends `/api` and `/healthz` to the server on port 3000.
 
