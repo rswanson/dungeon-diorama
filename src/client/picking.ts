@@ -16,10 +16,17 @@ const TOUCH = 1e-12;
 
 /**
  * The square of the first column that `ray` hits, on its top or on a side, or
- * null when the ray does not hit the board. It walks the squares under the
- * ray in order (a grid walk), so it does not need the board's mesh.
+ * null when the ray does not hit the board. With `tops`, only a top counts:
+ * the ray goes through the sides of a column, and the square is the first
+ * column whose top the ray comes down on, as a sprite can stand only on a top.
+ * It walks the squares under the ray in order (a grid walk), so it does not
+ * need the board's mesh.
  */
-export function pickSquare(board: Board, ray: Ray): Square | null {
+export function pickSquare(
+  board: Board,
+  ray: Ray,
+  { tops = false }: { tops?: boolean } = {},
+): Square | null {
   const o = ray.origin;
   const d = ray.direction;
 
@@ -57,10 +64,15 @@ export function pickSquare(board: Board, ray: Ray): Square | null {
   for (;;) {
     const leave = Math.min(nextX, nextZ, exit);
     const top = columnTop(Number(board.heights[z][x]));
+    const inY = o.y + d.y * t;
+    const outY = o.y + d.y * leave;
     // In the box, the ray is between the base and the highest top. A ray that
-    // only touches the top edge of a column (equal height) does not hit it.
-    if (Math.min(o.y + d.y * t, o.y + d.y * leave) < top - TOUCH)
-      return { x, z };
+    // only touches the top edge of a column (equal height) does not hit it. On
+    // a top, the ray goes into the cell at or above the top and leaves it below.
+    const hit = tops
+      ? inY >= top - TOUCH && outY < top - TOUCH
+      : Math.min(inY, outY) < top - TOUCH;
+    if (hit) return { x, z };
     if (leave >= exit) return null;
     if (nextX === nextZ) {
       // A ray through a grid corner leaves both cells at once.

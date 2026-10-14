@@ -104,6 +104,23 @@ describe("BoardCamera", () => {
     expect(v.camera.zoom).toBe(MIN_ZOOM);
   });
 
+  it("gives the screen length of board units, at each zoom and size", () => {
+    const v = view();
+    /** The screen distance between the target and a point `units` to the right of the camera. */
+    const across = (units: number): number => {
+      const right = new Vector3(1, 0, 0).applyQuaternion(v.camera.quaternion);
+      const a = v.screenPoint(v.target);
+      const b = v.screenPoint(v.target.clone().addScaledVector(right, units));
+      return a.distanceTo(b);
+    };
+    expect(v.unitsToPixels(0.5)).toBeCloseTo(across(0.5), 6);
+    v.zoomAt(2, W / 2, H / 2);
+    expect(v.unitsToPixels(0.5)).toBeCloseTo(across(0.5), 6);
+    const before = v.unitsToPixels(1);
+    v.resize(W * 2, H * 2);
+    expect(v.unitsToPixels(1)).toBeCloseTo(2 * before, 6);
+  });
+
   it("keeps the board point under the pointer still when it zooms", () => {
     const v = view();
     const point = v.ray(600, 200).at(100, new Vector3());

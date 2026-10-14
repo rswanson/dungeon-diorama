@@ -26,12 +26,12 @@ export const MIN_ZOOM = 1;
 const CLOSEST_VIEW = 3;
 
 /** The half width and the half height of a view, in board units. */
-export interface ViewSize {
+interface ViewSize {
   halfWidth: number;
   halfHeight: number;
 }
 
-export interface Frustum {
+interface Frustum {
   left: number;
   right: number;
   top: number;
@@ -70,8 +70,11 @@ function azimuthOf(turns: number): number {
   return START_AZIMUTH + turns * TURN_STEP;
 }
 
-/** The eased part (0–1) of a turn after the part `t` (0–1) of its time. */
-function easeTurn(t: number): number {
+/**
+ * The eased part (0–1) of a movement after the part `t` of its time, clamped
+ * to 0–1: fast at the start, slow at the end. A turn and a sprite's settle use it.
+ */
+export function easeOut(t: number): number {
   return 1 - (1 - MathUtils.clamp(t, 0, 1)) ** 3;
 }
 
@@ -155,7 +158,7 @@ export class BoardCamera {
       this.turn = null;
       this.settled = this.turns;
     } else {
-      this.angle = MathUtils.lerp(this.turn.from, end, easeTurn(t));
+      this.angle = MathUtils.lerp(this.turn.from, end, easeOut(t));
     }
     this.place(this.angle);
     return this.turn !== null;
@@ -215,6 +218,15 @@ export class BoardCamera {
       ((this.projected.x + 1) / 2) * this.width,
       ((1 - this.projected.y) / 2) * this.height,
     );
+  }
+
+  /**
+   * The length in CSS pixels of `units` board units across the view (square
+   * to the camera), at the current zoom and size of the view.
+   */
+  unitsToPixels(units: number): number {
+    const { left, right, zoom } = this.camera;
+    return (units * this.width * zoom) / (right - left);
   }
 
   /** Moves the target on the ground so that the board moves `dx`, `dy` CSS pixels on the screen. It does not clamp or place the camera. */

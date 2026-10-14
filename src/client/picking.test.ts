@@ -14,6 +14,14 @@ const BOARD: Board = {
   heights: ["1200", "3900", "0010"],
   tiles: ["ssss", "ssss", "ssss"],
 };
+// A row of three: a column of height 2 (top 1.5) between two of height 0 (top 0.5).
+const ROW: Board = {
+  width: 3,
+  depth: 1,
+  materials: BOARD.materials,
+  heights: ["020"],
+  tiles: ["sss"],
+};
 const [W, H] = [800, 600];
 // Points on a top, from its corner. In the isometric view, the ray through the
 // center of a top passes exactly through grid corners, where two columns touch,
@@ -124,5 +132,35 @@ describe("pickSquare", () => {
     expect(
       pickSquare(BOARD, new Ray(new Vector3(-1, 6, 1), across)),
     ).toBeNull();
+  });
+
+  describe("with tops", () => {
+    // Each ray goes to -x, and down 0.5 for each square.
+    const left = new Vector3(-1, -0.5, 0);
+
+    it("goes through the side of a taller column to the top behind it", () => {
+      // At x = 2 the ray is at y = 1.2, on the side of [1, 0]. It leaves that
+      // column at y = 0.7 and comes down on the top of [0, 0].
+      const ray = new Ray(new Vector3(4, 2.2, 0.5), left);
+      expect(pickSquare(ROW, ray)).toEqual({ x: 1, z: 0 });
+      expect(pickSquare(ROW, ray, { tops: true })).toEqual({ x: 0, z: 0 });
+    });
+
+    it("gives the first top that the ray comes down on", () => {
+      // At x = 2 the ray is at y = 1.8, over [1, 0]. It comes down on its top.
+      const ray = new Ray(new Vector3(4, 2.8, 0.5), left);
+      expect(pickSquare(ROW, ray, { tops: true })).toEqual({ x: 1, z: 0 });
+    });
+
+    it("gives null for a ray that hits only sides and leaves the board", () => {
+      // Under the top of [2, 0], to the base.
+      const down = new Ray(new Vector3(4, 0.8, 0.5), left);
+      expect(pickSquare(ROW, down)).toEqual({ x: 2, z: 0 });
+      expect(pickSquare(ROW, down, { tops: true })).toBeNull();
+      // Through all three columns, under each top, out at x = 0.
+      const across = new Ray(new Vector3(4, 0.4, 0.5), new Vector3(-1, 0, 0));
+      expect(pickSquare(ROW, across)).toEqual({ x: 2, z: 0 });
+      expect(pickSquare(ROW, across, { tops: true })).toBeNull();
+    });
   });
 });

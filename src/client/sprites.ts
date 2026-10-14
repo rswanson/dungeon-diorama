@@ -6,12 +6,14 @@ import {
   SRGBColorSpace,
   type Object3D,
   type Ray,
+  type Vector3,
 } from "three";
 import type { Board, SpriteSpec } from "../shared/scene.js";
+import type { Square } from "./picking.js";
 import {
   addQuad,
-  columnTop,
   geometryFrom,
+  standPoint,
   VOXEL_MATERIAL,
   type GeometryData,
   type Vec3,
@@ -35,7 +37,7 @@ const FALLBACK_WIDTH = 16;
 const FALLBACK_HEIGHT = 24;
 
 /** One voxel of a sprite, in voxel steps. */
-export interface Voxel {
+interface Voxel {
   /** The pixel column, from the left of the image. */
   x: number;
   /** The pixel row, from the bottom of the image. */
@@ -168,12 +170,12 @@ export function buildSpriteGeometry({
 }
 
 /** The height of a sprite, in board units: the top of its highest voxel. */
-export function spriteHeight({ voxels }: SpriteVoxels): number {
+function spriteHeight({ voxels }: SpriteVoxels): number {
   return voxels.reduce((top, v) => Math.max(top, v.y + 1), 0) * VOXEL;
 }
 
 /** One sprite on the board. */
-export interface PlacedSprite {
+interface PlacedSprite {
   spec: SpriteSpec;
   mesh: Mesh;
   /** The height of the sprite above its column top, in board units. */
@@ -198,8 +200,15 @@ export class SpriteLayer {
     this.group.name = "sprites";
   }
 
-  /** Puts a sprite on its square. It replaces a sprite with the same id. */
-  add(spec: SpriteSpec, voxels: SpriteVoxels): PlacedSprite {
+  /**
+   * Puts a sprite on a square: `at`, or the square of the scene file. It
+   * replaces a sprite with the same id.
+   */
+  add(
+    spec: SpriteSpec,
+    voxels: SpriteVoxels,
+    at: Square = { x: spec.at[0], z: spec.at[1] },
+  ): PlacedSprite {
     this.remove(spec.id);
     const geometry = geometryFrom(buildSpriteGeometry(voxels));
     const mesh = new Mesh(geometry, VOXEL_MATERIAL);
@@ -207,12 +216,7 @@ export class SpriteLayer {
     mesh.userData.spriteId = spec.id;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    const [x, z] = spec.at;
-    mesh.position.set(
-      x + 0.5,
-      columnTop(Number(this.board.heights[z][x])),
-      z + 0.5,
-    );
+    standPoint(this.board, at, mesh.position);
     mesh.rotation.y = this.yaw;
     mesh.updateMatrixWorld();
     this.group.add(mesh);
@@ -239,8 +243,12 @@ export class SpriteLayer {
     }
   }
 
-  /** The id of the first sprite that `ray` hits, or null when it hits none or hits an occluder first. */
-  spriteAt(ray: Ray): string | null {
+  /**
+   * The first sprite that `ray` hits: its id and the point of the hit, in
+   * board units. It is null when the ray hits no sprite or hits an occluder
+   * first.
+   */
+  spriteAt(ray: Ray): { id: string; point: Vector3 } | null {
     this.raycaster.ray.copy(ray);
     const meshes = [...this.sprites.values()].map((s) => s.mesh);
     const [hit] = this.raycaster.intersectObjects(
@@ -248,7 +256,7 @@ export class SpriteLayer {
       false,
     );
     const id: unknown = hit?.object.userData.spriteId;
-    return typeof id === "string" ? id : null;
+    return typeof id === "string" ? { id, point: hit.point } : null;
   }
 
   private remove(id: string): void {

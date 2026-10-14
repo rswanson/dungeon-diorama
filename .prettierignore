@@ -1,5 +1,7 @@
 dist/
 coverage/
+test-results/
+playwright-report/
 package-lock.json
 # The specs and batch plans keep the format they were approved in.
 docs/

@@ -1,0 +1,69 @@
+import type { Square } from "./picking.js";
+
+// Where each sprite stands. It has no DOM and no three.js, so a test can run it
+// in Node. The scene file gives the start layout.
+
+/** The size of the board, in squares. */
+interface BoardSize {
+  width: number;
+  depth: number;
+}
+
+/** The record of the square of each sprite. One sprite stands on each square at most. */
+export class BoardState {
+  private readonly squares = new Map<string, Square>();
+
+  constructor(
+    private readonly size: BoardSize,
+    sprites: readonly { id: string; at: readonly [number, number] }[],
+  ) {
+    for (const { id, at } of sprites) {
+      this.squares.set(id, { x: at[0], z: at[1] });
+    }
+  }
+
+  /** The square of a sprite, or undefined for an unknown id. */
+  squareOf(id: string): Square | undefined {
+    const square = this.squares.get(id);
+    return square && { ...square };
+  }
+
+  /** The id of the sprite on square [x, z], or null when the square is free. */
+  occupant(x: number, z: number): string | null {
+    for (const [id, square] of this.squares) {
+      if (square.x === x && square.z === z) return id;
+    }
+    return null;
+  }
+
+  onBoard({ x, z }: Square): boolean {
+    return (
+      Number.isInteger(x) &&
+      Number.isInteger(z) &&
+      x >= 0 &&
+      x < this.size.width &&
+      z >= 0 &&
+      z < this.size.depth
+    );
+  }
+
+  /**
+   * True when the sprite can stand on `to`: the square is on the board and no
+   * other sprite stands on it. Its own square is true: a move there changes nothing.
+   */
+  canMove(id: string, to: Square): boolean {
+    if (!this.squares.has(id) || !this.onBoard(to)) return false;
+    const other = this.occupant(to.x, to.z);
+    return other === null || other === id;
+  }
+
+  /** Puts the sprite on `to`. It throws when `canMove` is false. */
+  move(id: string, to: Square): void {
+    if (!this.canMove(id, to)) {
+      throw new Error(
+        `The sprite "${id}" cannot move to square [${to.x}, ${to.z}].`,
+      );
+    }
+    this.squares.set(id, { x: to.x, z: to.z });
+  }
+}

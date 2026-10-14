@@ -327,7 +327,7 @@ export function spritePixels(): Record<string, SpritePixels> {
 }
 
 /** The PNG bytes of each starter sprite, by id. */
-export function renderSprites(): Record<string, Buffer> {
+function renderSprites(): Record<string, Buffer> {
   return Object.fromEntries(
     Object.entries(spritePixels()).map(([name, sprite]) => [
       name,

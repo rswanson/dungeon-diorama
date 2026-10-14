@@ -8,6 +8,7 @@ import { columnTop, createBoardMesh } from "./board.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
 import {
   buildSpriteGeometry,
+  DEPTH,
   fitsSprite,
   SpriteLayer,
   VOXEL,
@@ -177,9 +178,13 @@ describe("SpriteLayer.spriteAt", () => {
   const along = (x: number, y: number): Ray =>
     new Ray(new Vector3(x, y, 5), new Vector3(0, 0, -1));
 
-  it("returns the id of the sprite that the ray hits", () => {
+  it("returns the id of the sprite that the ray hits, and the point of the hit", () => {
     const { layer } = stage("00");
-    expect(layer.spriteAt(along(0.5, 0.6))).toBe("imp");
+    const hit = layer.spriteAt(along(0.5, 0.6));
+    expect(hit?.id).toBe("imp");
+    // The front face of the slab is half its depth in front of the square's center.
+    const front = 0.5 + (DEPTH / 2) * VOXEL;
+    expect(hit?.point.toArray()).toEqual([0.5, 0.6, front]);
   });
 
   it("returns null when a board column in front hides the sprite", () => {
