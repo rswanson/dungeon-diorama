@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// The end-to-end tests run against the built server. Run `npm run build` first.
+// The end-to-end tests run against the built server and a real Postgres. Run
+// `npm run build` and `npm run db:up` first.
 const PORT = 4321;
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -33,6 +34,7 @@ export default defineConfig({
   webServer: {
     command: "node dist/server/index.js",
     url: `${BASE}/healthz`,
+    // Without DATABASE_URL (CI sets it), the server uses the `npm run db:up` database.
     env: { PORT: String(PORT) },
     reuseExistingServer: !process.env.CI,
   },

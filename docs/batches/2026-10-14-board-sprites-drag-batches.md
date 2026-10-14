@@ -77,7 +77,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B6: Path line and distance
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** While dragging, a line shows the shortest route from the start square to the target, around occupied squares, with its length in feet by the 3.5e diagonal rule, or "No path".
 - **Acceptance criteria:**
   1. Path finding (shared module, unit tested) returns the shortest route on the grid, around occupied squares; a diagonal step can pass between two occupied squares; height does not block or cost.
@@ -90,7 +90,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B7: Saved moves per visitor
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** A visitor's moves stay after a reload, and each visitor has their own positions. Caster runs the game with a Postgres database.
 - **Acceptance criteria:**
   1. The server sets the `dd_visitor` cookie (random UUID, `HttpOnly`, `SameSite=Lax`, `Secure` in production, 400 days) when a request has none.

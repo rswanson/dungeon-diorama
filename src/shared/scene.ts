@@ -56,6 +56,35 @@ export function isSceneName(name: string): boolean {
   return SCENE_NAME.test(name);
 }
 
+/** True when `value` is `[x, z]` with two whole numbers. */
+export function isAt(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    value.every((n) => Number.isInteger(n))
+  );
+}
+
+/** True when `square` is a whole-number square of a board of this size. */
+export function onBoard(
+  { width, depth }: { width: number; depth: number },
+  { x, z }: Square,
+): boolean {
+  return (
+    Number.isInteger(x) &&
+    Number.isInteger(z) &&
+    x >= 0 &&
+    x < width &&
+    z >= 0 &&
+    z < depth
+  );
+}
+
+/** The key of a square, `"x,z"`, for a set or a map of squares. */
+export function squareKey({ x, z }: Square): string {
+  return `${x},${z}`;
+}
+
 /** Reads the text of a scene file and validates it. */
 export function parseScene(text: string): SceneResult {
   let data: unknown;
@@ -244,27 +273,24 @@ function checkSprites(
     }
 
     const at = sprite.at;
-    if (
-      !Array.isArray(at) ||
-      at.length !== 2 ||
-      !at.every((n) => Number.isInteger(n))
-    ) {
+    if (!isAt(at)) {
       problems.push(`${label}: at must be [x, z] with two whole numbers.`);
       return;
     }
-    const [x, z] = at as [number, number];
+    const [x, z] = at;
     if (width === undefined || depth === undefined) return;
-    if (x < 0 || x >= width || z < 0 || z >= depth) {
+    if (!onBoard({ width, depth }, { x, z })) {
       problems.push(
         `${label} at [${x}, ${z}] is off the ${width}x${depth} board.`,
       );
       return;
     }
-    const other = squares.get(`${x},${z}`);
+    const key = squareKey({ x, z });
+    const other = squares.get(key);
     if (other) {
       problems.push(`${other} and ${where} both stand on [${x}, ${z}].`);
     } else {
-      squares.set(`${x},${z}`, where);
+      squares.set(key, where);
     }
   });
 }

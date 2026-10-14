@@ -1,4 +1,4 @@
-import type { Square } from "../shared/scene.js";
+import { onBoard, squareKey, type Square } from "../shared/scene.js";
 
 // Where each sprite stands. It has no DOM and no three.js, so a test can run it
 // in Node. The scene file gives the start layout.
@@ -50,25 +50,45 @@ export class BoardState {
     return occupied;
   }
 
-  onBoard({ x, z }: Square): boolean {
-    return (
-      Number.isInteger(x) &&
-      Number.isInteger(z) &&
-      x >= 0 &&
-      x < this.size.width &&
-      z >= 0 &&
-      z < this.size.depth
-    );
+  onBoard(square: Square): boolean {
+    return onBoard(this.size, square);
   }
 
   /**
    * True when the sprite can stand on `to`: the square is on the board and no
-   * other sprite stands on it. Its own square is true: a move there changes nothing.
+   * other sprite stands on it. Its own square is true: a move there changes
+   * nothing.
    */
   canMove(id: string, to: Square): boolean {
     if (!this.squares.has(id) || !this.onBoard(to)) return false;
     const other = this.occupant(to.x, to.z);
     return other === null || other === id;
+  }
+
+  /**
+   * Puts each sprite on its square in `layout`, by sprite id, all at once. A
+   * sprite that `layout` does not list stays where it is. It throws, and
+   * changes nothing, when the result puts a sprite off the board or two
+   * sprites on one square.
+   */
+  place(layout: Readonly<Record<string, readonly [number, number]>>): void {
+    const next = new Map(this.squares);
+    for (const id of this.squares.keys()) {
+      if (!Object.hasOwn(layout, id)) continue;
+      const [x, z] = layout[id];
+      next.set(id, { x, z });
+    }
+    const seen = new Set<string>();
+    for (const [id, square] of next) {
+      const key = squareKey(square);
+      if (!this.onBoard(square) || seen.has(key)) {
+        throw new Error(
+          `The layout cannot put "${id}" on square [${square.x}, ${square.z}].`,
+        );
+      }
+      seen.add(key);
+    }
+    for (const [id, square] of next) this.squares.set(id, square);
   }
 
   /** Puts the sprite on `to`. It throws when `canMove` is false. */

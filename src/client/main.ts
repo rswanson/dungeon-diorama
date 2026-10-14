@@ -9,11 +9,13 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import type { Layout } from "../shared/positions.js";
 import {
   isSceneName,
   parseScene,
   type Scene as SceneFile,
 } from "../shared/scene.js";
+import { loadPositions, savePosition } from "./api.js";
 import { createBoardMesh } from "./board.js";
 import { BoardState } from "./board-state.js";
 import { BoardCamera } from "./camera.js";
@@ -25,6 +27,7 @@ import { exposeDiorama } from "./hook.js";
 import { showTurnButtons } from "./hud.js";
 import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
+import { showNotice } from "./notice.js";
 import { PathLine } from "./pathline.js";
 import { attachPointer } from "./pointer.js";
 import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
@@ -70,7 +73,15 @@ async function loadScene(name: string): Promise<SceneFile> {
   return result.scene;
 }
 
-function showBoard(file: SceneFile): void {
+/**
+ * Shows the scene `name` from its file. `saved` gives this visitor's
+ * positions, or null when they did not load.
+ */
+function showBoard(
+  name: string,
+  file: SceneFile,
+  saved: Promise<Layout | null>,
+): void {
   const canvas = document.querySelector<HTMLCanvasElement>("#scene");
   if (!canvas) throw new Error("The page has no #scene canvas.");
 
@@ -95,7 +106,8 @@ function showBoard(file: SceneFile): void {
   const sprites = new SpriteLayer(file.board, [board]);
   scene.add(sprites.group);
   const label = new BoardLabel();
-  // Where each sprite stands. Moves are not saved: a reload shows the scene file layout.
+  // Where each sprite stands: the scene file layout until this visitor's
+  // positions load.
   const state = new BoardState(file.board, file.sprites);
   const highlight = new SquareHighlight(file.board);
   scene.add(highlight.mesh);
@@ -173,6 +185,13 @@ function showBoard(file: SceneFile): void {
     label: pathLabel,
     scene,
     requestDraw,
+    // On a 409, another tab moved a sprite there. The result then gives the
+    // positions on the server, and the drag shows them.
+    async save(id, to) {
+      const result = await savePosition(name, id, to);
+      if (!result.ok) showNotice("Move not saved");
+      return result;
+    },
   });
 
   window.addEventListener("resize", requestDraw);
@@ -192,10 +211,26 @@ function showBoard(file: SceneFile): void {
 
   draw();
 
-  // The board shows first. Each sprite stands on it when its image loads.
+  // This visitor's positions, which the server merged with the scene file.
+  // When they do not load, or do not fit the board, the board keeps the scene
+  // file layout.
+  const layout = saved.then((positions) => {
+    try {
+      if (positions) {
+        state.place(positions);
+        return;
+      }
+    } catch (error) {
+      console.warn("The saved moves do not fit the board:", error);
+    }
+    showNotice("Saved moves did not load");
+  });
+
+  // The board shows first. Each sprite stands on it when its image and the
+  // positions load.
   let loaded = 0;
   for (const spec of file.sprites) {
-    void loadSpriteVoxels(spec).then((voxels) => {
+    void Promise.all([loadSpriteVoxels(spec), layout]).then(([voxels]) => {
       sprites.add(spec, voxels, state.squareOf(spec.id));
       loaded++;
       requestDraw();
@@ -214,8 +249,16 @@ function showBoard(file: SceneFile): void {
 
 async function main(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
+  const name = params.get("scene") ?? "demo";
+  // The positions load at the same time as the scene file.
+  const saved = isSceneName(name)
+    ? loadPositions(name).catch((error: unknown) => {
+        console.warn("The saved moves did not load:", error);
+        return null;
+      })
+    : Promise.resolve(null);
   try {
-    showBoard(await loadScene(params.get("scene") ?? "demo"));
+    showBoard(name, await loadScene(name), saved);
   } catch (error) {
     if (error instanceof SceneError) {
       showErrorPanel(error.heading, error.problems);

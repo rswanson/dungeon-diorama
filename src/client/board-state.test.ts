@@ -67,4 +67,16 @@ describe("BoardState", () => {
   it("does not move an unknown sprite", () => {
     expect(state().canMove("nobody", { x: 1, z: 1 })).toBe(false);
   });
+
+  it("places a whole layout at once, and refuses one with a clash", () => {
+    const board = state();
+    // The fighter takes the goblin's square as the goblin leaves it.
+    board.place({ fighter: [2, 1], goblin: [3, 2], nobody: [0, 0] });
+    expect(board.squareOf("fighter")).toEqual({ x: 2, z: 1 });
+    expect(board.squareOf("goblin")).toEqual({ x: 3, z: 2 });
+    expect(board.squareOf("nobody")).toBeUndefined();
+    expect(() => board.place({ fighter: [3, 2] })).toThrow();
+    expect(() => board.place({ fighter: [4, 0] })).toThrow();
+    expect(board.squareOf("fighter")).toEqual({ x: 2, z: 1 });
+  });
 });

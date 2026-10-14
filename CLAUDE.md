@@ -6,52 +6,64 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 
 - Client: TypeScript, Three.js and Vite. There is no UI framework.
 - Server: Node 22, TypeScript and Hono (`@hono/node-server`). In production, the server serves the built client, the files in `public/` and a JSON API.
-- Database (from batch B7): Postgres through the `pg` package, with plain SQL migrations.
-- Tests: Vitest for unit and API tests. Playwright (Chromium only) for the end-to-end drag test in `e2e/`.
+- Database: Postgres 16 through the `pg` package, with plain SQL migrations in `src/server/migrations.ts`. The server reads `DATABASE_URL`.
+- Tests: Vitest for unit and API tests. The API tests use a real Postgres (`TEST_DATABASE_URL`). Playwright (Chromium only) for the end-to-end drag test in `e2e/`.
 - Lint and format: ESLint (flat config, `typescript-eslint`) and Prettier.
-- Host: Caster, project `dungeon-diorama`, in the owner's Caster account. Deploy on push is off. After each merge to `main`, Claude deploys `main` through Caster's MCP server (below).
+- Host: Caster, project `dungeon-diorama`, in the owner's Caster account. A Caster Postgres database of the project gives the server its `DATABASE_URL`. Deploy on push is off. After each merge to `main`, Claude deploys `main` through Caster's MCP server (below).
 
 ## Layout
 
-| Path                       | What it is                                                                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index.html`               | The page. Vite builds it with `src/client/main.ts`                                                                                             |
-| `src/client/`              | The browser code                                                                                                                               |
-| `src/server/`              | The Hono server. `app.ts` makes the app, `index.ts` starts it                                                                                  |
-| `src/shared/`              | Code that the client and the server both use, for example the scene validation                                                                 |
-| `public/`                  | Static files (scene files, sprite images). Vite copies them to `dist/client`                                                                   |
-| `scripts/sprites.ts`       | The starter sprites as rows of palette characters. It writes the PNGs in `public/sprites/`. Commit both. A test fails when their pixels differ |
-| `dist/client`              | The built client (`vite build`)                                                                                                                |
-| `dist/server`              | The built server (`tsc -p tsconfig.server.json`)                                                                                               |
-| `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                                                   |
-| `tsconfig.json`            | The type check for the client and `src/shared`                                                                                                 |
-| `tsconfig.server.json`     | The type check and the build for the server and `src/shared`                                                                                   |
-| `tsconfig.node.json`       | The type check for the tests, `e2e/`, `vite.config.ts`, `playwright.config.ts` and `scripts/`                                                  |
-| `Dockerfile`               | The production image. It builds, then runs `node dist/server/index.js` with only the runtime packages                                          |
-| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build`, `npm run e2e` and a smoke test of the Docker image on each pull request and each push to `main`          |
-| `e2e/`                     | The Playwright test (`playwright.config.ts`). It reads the board through `window.diorama` (`src/client/hook.ts`), which changes nothing        |
+| Path                       | What it is                                                                                                                                                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`               | The page. Vite builds it with `src/client/main.ts`                                                                                                                                                                                      |
+| `src/client/`              | The browser code                                                                                                                                                                                                                        |
+| `src/server/`              | The Hono server. `app.ts` makes the app, `index.ts` starts it. `api.ts` is the positions API, `positions.ts` the merge of the saved rows, `visitor.ts` the visitor cookie, `db.ts` the pool, `withTransaction` and the migration runner |
+| `src/server/migrations.ts` | The SQL migrations (`MIGRATIONS`), in order. When the server starts, it applies each new one, all in one transaction                                                                                                                    |
+| `docker-compose.yml`       | The local Postgres for dev and the tests (`npm run db:up`)                                                                                                                                                                              |
+| `src/shared/`              | Code that the client and the server both use, for example the scene validation                                                                                                                                                          |
+| `public/`                  | Static files (scene files, sprite images). Vite copies them to `dist/client`                                                                                                                                                            |
+| `scripts/sprites.ts`       | The starter sprites as rows of palette characters. It writes the PNGs in `public/sprites/`. Commit both. A test fails when their pixels differ                                                                                          |
+| `dist/client`              | The built client (`vite build`)                                                                                                                                                                                                         |
+| `dist/server`              | The built server (`tsc -p tsconfig.server.json`)                                                                                                                                                                                        |
+| `tsconfig.base.json`       | The options that the other three `tsconfig` files share. Each one extends it                                                                                                                                                            |
+| `tsconfig.json`            | The type check for the client and `src/shared`                                                                                                                                                                                          |
+| `tsconfig.server.json`     | The type check and the build for the server and `src/shared`                                                                                                                                                                            |
+| `tsconfig.node.json`       | The type check for the tests, `e2e/`, `vite.config.ts`, `playwright.config.ts` and `scripts/`                                                                                                                                           |
+| `Dockerfile`               | The production image. It builds, then runs `node dist/server/index.js` with only the runtime packages                                                                                                                                   |
+| `.github/workflows/ci.yml` | CI: `npm run check`, `npm run build`, `npm run e2e` and a smoke test of the Docker image on each pull request and each push to `main`, with a Postgres 16 service                                                                       |
+| `e2e/`                     | The Playwright test (`playwright.config.ts`). It reads the board through `window.diorama` (`src/client/hook.ts`), which changes nothing                                                                                                 |
 
 - Put a package that the server uses at runtime in `dependencies`. Put all other packages in `devDependencies`. Vite bundles the client packages (for example `three`), so they are dev packages.
 - The server code uses Node ESM. A relative import in `src/server/` or `src/shared/` must end in `.js`.
 - The server reads `PORT` (default 3000) and listens on `0.0.0.0`.
+- The server reads `DATABASE_URL`. At the start, it tries 10 times to reach the database, 1 second apart, applies the migrations, and exits with code 1 when it cannot. A refused connection fails at once, so the server exits after about 10 seconds. A host that does not answer costs 5 seconds for each try (the connect timeout), so the server can take up to about 60 seconds to exit. In dev, without `DATABASE_URL`, it uses the `npm run db:up` database. `/healthz` answers 503 when the database does not answer.
+- The server sets the `dd_visitor` cookie on each `/api` request that has none. `NODE_ENV=production` makes it `Secure`.
+- `src/server/positions.ts` (`mergePositions`) puts the saved rows on top of the scene file. The GET of the positions gives this layout, and the client shows it as it is. A `409` of the PUT gives it too, as `{"error": ..., "positions": ...}`, so the client shows it with no other read.
+- The client saves one move at a time. Until the save ends, a press takes no sprite. A failed save puts the sprite back on its start square.
+- The API tests (`src/server/api.test.ts`) run only when `TEST_DATABASE_URL` is set. CI sets it. Each run makes a schema of its own and drops it. They and the positions tests use the scene in `src/server/test-fixtures.ts`.
+- When a migration changes the database, add a new entry at the end of `MIGRATIONS` in `src/server/migrations.ts`. Do not change a migration that is on `main`.
 
 ## Commands
 
-| Command                | Does                                                                             |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `npm run dev`          | Starts Vite on port 5173 and the server on port 3000 (`tsx watch`)               |
-| `npm run build`        | Builds the client and the server to `dist/`                                      |
-| `npm start`            | Runs the built server. The image runs the same file: `node dist/server/index.js` |
-| `npm run check`        | Runs the type check, the lint, the format check and the tests                    |
-| `npm run typecheck`    | Runs `tsc` on the three `tsconfig` files that extend the base                    |
-| `npm run lint`         | Runs ESLint                                                                      |
-| `npm run format`       | Formats the files with Prettier                                                  |
-| `npm run format:check` | Checks the format with Prettier                                                  |
-| `npm test`             | Runs the Vitest tests                                                            |
-| `npm run e2e`          | Runs the Playwright test on the built server. Run `npm run build` first          |
-| `npm run sprites`      | Writes the starter sprite PNGs from `scripts/sprites.ts` (with `tsx`)            |
+| Command                | Does                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `npm run dev`          | Starts Vite on port 5173 and the server on port 3000 (`tsx watch`)                          |
+| `npm run build`        | Builds the client and the server to `dist/`                                                 |
+| `npm start`            | Runs the built server. The image runs the same file: `node dist/server/index.js`            |
+| `npm run check`        | Runs the type check, the lint, the format check and the tests                               |
+| `npm run typecheck`    | Runs `tsc` on the three `tsconfig` files that extend the base                               |
+| `npm run lint`         | Runs ESLint                                                                                 |
+| `npm run format`       | Formats the files with Prettier                                                             |
+| `npm run format:check` | Checks the format with Prettier                                                             |
+| `npm test`             | Runs the Vitest tests                                                                       |
+| `npm run e2e`          | Runs the Playwright test on the built server. Run `npm run build` and `npm run db:up` first |
+| `npm run db:up`        | Starts the local Postgres in Docker on port 54329                                           |
+| `npm run db:down`      | Stops the local Postgres. The data stays in its volume                                      |
+| `npm run sprites`      | Writes the starter sprite PNGs from `scripts/sprites.ts` (with `tsx`)                       |
 
 In dev, Vite sends `/api` and `/healthz` to the server on port 3000.
+
+For the API tests, set `TEST_DATABASE_URL` as `.env.example` gives it, after `npm run db:up`. Nothing reads a `.env` file.
 
 ## Workflow
 

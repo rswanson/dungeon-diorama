@@ -1,6 +1,6 @@
 // The route of a move on the board, by the 3.5e rules. It has no DOM and no
 // three.js, so the client, the server and the tests can all use it.
-import type { Square } from "./scene.js";
+import { onBoard, type Square } from "./scene.js";
 
 /**
  * The squares that a route can use: the size of the board and the squares
@@ -63,7 +63,8 @@ const STEPS = [
  * after an even number of diagonal steps, and after an odd number.
  */
 export function findPath(grid: Grid, from: Square, to: Square): Route | null {
-  if (!inside(grid, from) || !inside(grid, to)) return null;
+  // The input can come from outside, so check that both are whole-number squares.
+  if (!onBoard(grid, from) || !onBoard(grid, to)) return null;
   if (from.x === to.x && from.z === to.z) {
     return { squares: [{ x: from.x, z: from.z }], feet: 0 };
   }
@@ -124,7 +125,7 @@ export function dragRoute(
   from: Square,
   to: Square | null,
 ): DragRoute {
-  if (!to || !inside(grid, to) || grid.blocked(to.x, to.z)) return null;
+  if (!to || !onBoard(grid, to) || grid.blocked(to.x, to.z)) return null;
   if (to.x === from.x && to.z === from.z) return null;
   return findPath(grid, from, to) ?? "none";
 }
@@ -133,18 +134,6 @@ export function dragRoute(
 export function routeLabel(route: DragRoute): string | null {
   if (isRoute(route)) return `${route.feet} ft`;
   return route === "none" ? "No path" : null;
-}
-
-/** True when `square` is a whole-number square on the board. The input can come from outside. */
-function inside(grid: Grid, { x, z }: Square): boolean {
-  return (
-    Number.isInteger(x) &&
-    Number.isInteger(z) &&
-    x >= 0 &&
-    x < grid.width &&
-    z >= 0 &&
-    z < grid.depth
-  );
 }
 
 /** The squares from the start to state `end`, by the `before` of each state. */

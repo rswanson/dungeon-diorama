@@ -13,6 +13,7 @@ import {
   type DragRoute,
   type Grid,
 } from "../shared/path.js";
+import type { Layout } from "../shared/positions.js";
 import type { Board, Square } from "../shared/scene.js";
 import { standPoint } from "./board.js";
 import type { BoardState } from "./board-state.js";
@@ -76,6 +77,12 @@ interface DragParts {
   /** The ghost goes in here. */
   scene: Object3D;
   requestDraw(): void;
+  /**
+   * Saves the move of sprite `id` to `to`. It resolves with `ok` true when the
+   * move saved. A save that did not may give the server's `positions`, which
+   * the board then shows. Without `save`, nothing saves.
+   */
+  save?(id: string, to: Square): Promise<{ ok: boolean; positions?: Layout }>;
 }
 
 /** A sprite that moves to its square by itself, after a drop or a cancel. */
@@ -91,8 +98,10 @@ interface Settle {
  * The drag of a sprite: it lifts and follows the pointer from square to
  * square, a ghost stays on the start square, the target square glows, and a
  * line shows the route to it with its length in feet. The
- * drop puts the sprite on a free square or back on its start square. Moves are
- * not saved yet.
+ * drop puts the sprite on a free square or back on its start square. A move to
+ * another square saves (`save`). The sprite stands on its new square at once,
+ * and goes back to its start square when the save fails. One move saves at a
+ * time: until its save ends, a press takes no sprite.
  */
 export class SpriteDrag {
   private drag: {
@@ -109,6 +118,8 @@ export class SpriteDrag {
     route: DragRoute;
   } | null = null;
   private settle: Settle | null = null;
+  /** The id of the sprite whose move still saves, or null. */
+  private saving: string | null = null;
   private readonly aim = new Ray();
   private readonly centre = new Vector2();
 
@@ -117,10 +128,11 @@ export class SpriteDrag {
   /**
    * What a press at the canvas point `at` takes: the sprite under it, or null.
    * It does not take a sprite that still moves onto its square, as the lift
-   * needs the sprite at rest. Other sprites it takes as usual.
+   * needs the sprite at rest. While a move saves, it takes no sprite, as a
+   * failed save puts that sprite back on its start square.
    */
   grab(at: Point): Grab | null {
-    if (this.drag) return null;
+    if (this.drag || this.saving !== null) return null;
     const { board, view, sprites, state } = this.parts;
     const hit = sprites.spriteAt(view.ray(at.x, at.y));
     const from = hit && state.squareOf(hit.id);
@@ -142,9 +154,9 @@ export class SpriteDrag {
     return this.drag?.route ?? null;
   }
 
-  /** True while a drag runs or a sprite still moves onto its square. */
+  /** True while a drag runs, a sprite still moves onto its square, or a move still saves. */
   busy(): boolean {
-    return this.drag !== null || this.settle !== null;
+    return this.drag !== null || this.settle !== null || this.saving !== null;
   }
 
   start(grab: Grab, at: Point): void {
@@ -293,6 +305,7 @@ export class SpriteDrag {
   /**
    * The one way a drop ends: the sprite moves to `to` when it is free, or
    * goes back to its start square. A move to its own square changes nothing.
+   * A move to another square saves.
    */
   private onDrop(id: string, to: Square | null): void {
     const { sprites, state } = this.parts;
@@ -302,6 +315,55 @@ export class SpriteDrag {
     const dest = to && state.canMove(id, to) ? to : from;
     state.move(id, dest);
     this.settleOn(id, sprite.mesh, dest);
+    if (!sameSquare(dest, from)) this.store(id, from, dest);
+  }
+
+  /**
+   * Saves the move of sprite `id` from `from` to `to`. When the save fails,
+   * the sprite goes back to `from`, and the board shows the positions that
+   * the save gives, if any. No sprite moves until the save ends (`grab`), so
+   * `from` is still free then.
+   */
+  private store(id: string, from: Square, to: Square): void {
+    const { save, state } = this.parts;
+    if (!save) return;
+    this.saving = id;
+    const done = (result: { ok: boolean; positions?: Layout }): void => {
+      this.saving = null;
+      if (!result.ok) {
+        state.move(id, from);
+        const sprite = this.parts.sprites.get(id);
+        if (sprite) this.settleOn(id, sprite.mesh, from);
+        try {
+          if (result.positions) this.relayout(result.positions);
+        } catch (error) {
+          console.warn("The positions of the server do not fit:", error);
+        }
+      }
+      this.parts.requestDraw();
+    };
+    save(id, to).then(done, () => done({ ok: false }));
+  }
+
+  /**
+   * Puts each sprite on its square in `layout` at once, for example the
+   * positions that the server gives when a save fails. A drag that runs ends
+   * first, as a cancel does. It throws when `layout` puts a sprite off the
+   * board or two sprites on one square, and the sprites keep their squares.
+   */
+  relayout(layout: Readonly<Record<string, readonly [number, number]>>): void {
+    const { board, sprites, state } = this.parts;
+    this.cancel();
+    this.finishSettle();
+    state.place(layout);
+    for (const id of Object.keys(layout)) {
+      const sprite = sprites.get(id);
+      const square = state.squareOf(id);
+      if (!sprite || !square) continue;
+      standPoint(board, square, sprite.mesh.position);
+      sprite.mesh.updateMatrixWorld();
+    }
+    this.parts.requestDraw();
   }
 
   /** Takes away the ghost, the glow, the path line and its label. The sprite stays where it is. */

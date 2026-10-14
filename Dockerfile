@@ -13,6 +13,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./
 USER node
-# The server listens on $PORT, or on 3000 when PORT is not set.
+# The server listens on $PORT, or on 3000 when PORT is not set. It needs
+# DATABASE_URL: it exits when it cannot reach that database.
 EXPOSE 3000
 CMD ["node", "dist/server/index.js"]
