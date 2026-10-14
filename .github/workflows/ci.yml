@@ -24,14 +24,6 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
-      - name: Find the Playwright version
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # This installs only what the cache does not hold, and the system packages.
       - run: npx playwright install --with-deps chromium
       - id: e2e
         run: npm run e2e

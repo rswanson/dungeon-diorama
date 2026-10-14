@@ -2,12 +2,12 @@
 // this module, so a scene file is valid in the same way for both.
 
 /** A scene name is the file name in `public/scenes/` without `.json`. */
-export const SCENE_NAME = /^[a-z0-9-]{1,40}$/;
+const SCENE_NAME = /^[a-z0-9-]{1,40}$/;
 
 /** The largest board width and depth, in squares. */
-export const MAX_BOARD_SIDE = 64;
+const MAX_BOARD_SIDE = 64;
 
-export interface Material {
+interface Material {
   name: string;
   /** The color of the top face, as `#rrggbb`. */
   top: string;
@@ -41,7 +41,7 @@ export interface Scene {
   sprites: SpriteSpec[];
 }
 
-export type SceneResult =
+type SceneResult =
   { ok: true; scene: Scene } | { ok: false; problems: string[] };
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;

@@ -9,24 +9,31 @@ import {
   ShapeGeometry,
 } from "three";
 import type { Board } from "../shared/scene.js";
-import { columnTop, GRID_LINE } from "./board.js";
+import { GRID_LINE, standPoint } from "./board.js";
 import type { Square } from "./picking.js";
 
 /** A free square glows green, an occupied one red. */
-export type Glow = "free" | "occupied";
+type Glow = "free" | "occupied";
 
-const COLORS: Record<Glow, Color> = {
-  free: new Color("#5fd35a"),
-  occupied: new Color("#e5483f"),
-};
 const WHITE = new Color("#ffffff");
+/** The frame is this much lighter than the fill: this part of the way to white. */
+const FRAME_LIGHTER = 0.3;
+
+/** The fill color of a glow, and its frame color, lighter than the fill. */
+function glowColors(fill: string): { fill: Color; frame: Color } {
+  const color = new Color(fill);
+  return { fill: color, frame: color.clone().lerp(WHITE, FRAME_LIGHTER) };
+}
+
+const COLORS: Record<Glow, { fill: Color; frame: Color }> = {
+  free: glowColors("#5fd35a"),
+  occupied: glowColors("#e5483f"),
+};
 /** The glow is this far above the column top, so it shows over the top face. */
 const RAISE = 0.01;
 /** The fill is see-through, so the square under it shows. The frame is sharper. */
 const FILL_OPACITY = 0.45;
 const FRAME_OPACITY = 0.95;
-/** The frame is this much lighter than the fill: this part of the way to white. */
-const FRAME_LIGHTER = 0.3;
 /** The width of the frame, in board units. */
 const FRAME_WIDTH = 0.09;
 
@@ -70,11 +77,10 @@ export class SquareHighlight {
     this.mesh.visible = false;
   }
 
-  show({ x, z }: Square, glow: Glow): void {
-    const top = columnTop(Number(this.board.heights[z][x]));
-    this.mesh.position.set(x + 0.5, top + RAISE, z + 0.5);
-    this.fill.material.color.copy(COLORS[glow]);
-    this.frame.material.color.copy(COLORS[glow]).lerp(WHITE, FRAME_LIGHTER);
+  show(square: Square, glow: Glow): void {
+    standPoint(this.board, square, this.mesh.position).y += RAISE;
+    this.fill.material.color.copy(COLORS[glow].fill);
+    this.frame.material.color.copy(COLORS[glow].frame);
     this.mesh.visible = true;
   }
 

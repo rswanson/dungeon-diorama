@@ -1,11 +1,7 @@
 // The press rules (click, drag, drop and cancel), with no DOM so that a test can
 // run them in Node.
 
-/** A point on the canvas, in CSS pixels. The one point type of the pointer code. */
-export interface Point {
-  x: number;
-  y: number;
-}
+import type { Point } from "./point.js";
 
 /**
  * A press that moves less than this many CSS pixels before its release is a
@@ -16,7 +12,7 @@ export const CLICK_SLOP = 4;
 
 /** What a pointer event did to the press. `T` is what a press can drag, for example a sprite id. */
 export type PressEvent<T> =
-  | { kind: "click"; at: Point }
+  | { kind: "click"; grab: T | null; at: Point }
   | { kind: "drag-start"; grab: T; at: Point }
   | { kind: "drag-move"; at: Point }
   | { kind: "drop"; at: Point }
@@ -25,8 +21,6 @@ export type PressEvent<T> =
 
 interface Press<T> extends Point {
   id: number;
-  /** True for a finger. A finger has no button, so the buttons of a move say nothing about it. */
-  touch: boolean;
   /** What the press can drag, or null when it can only click. */
   grab: T | null;
   dragging: boolean;
@@ -58,25 +52,19 @@ export class PressTracker<T> {
     const cancelled = this.press?.dragging ? CANCEL : null;
     const starts = kind.touch ? touchCount === 1 : true;
     // A new press replaces one whose release was off the canvas.
-    this.press = starts
-      ? { id, ...at, touch: kind.touch, grab: grab(), dragging: false }
-      : null;
+    this.press = starts ? { id, ...at, grab: grab(), dragging: false } : null;
     return cancelled;
   }
 
   /**
    * A pointer moves. A move of `CLICK_SLOP` or more ends the click for good,
-   * and starts the drag when the press can drag something. `buttons` is
-   * `PointerEvent.buttons`. A mouse or pen move without the primary button
-   * down is the release: the browser sends no pointerup when the primary
-   * button goes up while another button is still down.
+   * and starts the drag when the press can drag something.
    */
-  move(id: number, at: Point, buttons = 1): PressEvent<T> {
+  move(id: number, at: Point): PressEvent<T> {
     const press = this.press;
     if (press?.id !== id) return null;
-    if (!press.touch && (buttons & 1) === 0) return this.up(id, at, false);
     if (press.dragging) return { kind: "drag-move", at };
-    if (this.distance(at) < CLICK_SLOP) return null;
+    if (this.distance(at, press) < CLICK_SLOP) return null;
     if (press.grab === null) {
       this.press = null;
       return null;
@@ -85,35 +73,44 @@ export class PressTracker<T> {
     return { kind: "drag-start", grab: press.grab, at };
   }
 
-  /**
-   * A pointer goes up. It gives a click, a drop, or null. A release that is
-   * found from a move (`click` false) is not a click.
-   */
-  up(id: number, at: Point, click = true): PressEvent<T> {
-    const press = this.press;
-    if (press?.id !== id) return null;
-    this.press = null;
+  /** A pointer goes up. It gives a click with what the press grabbed, a drop, or null. */
+  up(id: number, at: Point): PressEvent<T> {
+    const press = this.take(id);
+    if (!press) return null;
     if (press.dragging) return { kind: "drop", at };
-    if (!click) return null;
-    return this.distance(at, press) < CLICK_SLOP ? { kind: "click", at } : null;
+    return this.distance(at, press) < CLICK_SLOP
+      ? { kind: "click", grab: press.grab, at }
+      : null;
+  }
+
+  /**
+   * The press ended with no pointerup, for example when the primary button
+   * went up while another button was still down. It drops a drag, and ends a
+   * press that is not a drag. It never gives a click.
+   */
+  release(id: number, at: Point): PressEvent<T> {
+    return this.take(id)?.dragging ? { kind: "drop", at } : null;
   }
 
   /** The browser cancels the pointer, or the canvas loses it. */
   cancel(id: number): PressEvent<T> {
-    const press = this.press;
-    if (press?.id !== id) return null;
-    this.press = null;
-    return press.dragging ? CANCEL : null;
+    return this.take(id)?.dragging ? CANCEL : null;
   }
 
   /** The player presses Esc. It cancels a drag, and leaves a press that is not a drag. */
   escape(): PressEvent<T> {
-    if (!this.press?.dragging) return null;
-    this.press = null;
-    return CANCEL;
+    return this.press?.dragging ? this.cancel(this.press.id) : null;
   }
 
-  private distance(at: Point, press = this.press): number {
-    return press ? Math.hypot(at.x - press.x, at.y - press.y) : 0;
+  /** Ends the press of pointer `id` and gives it, or null for another pointer. */
+  private take(id: number): Press<T> | null {
+    const press = this.press;
+    if (press?.id !== id) return null;
+    this.press = null;
+    return press;
+  }
+
+  private distance(at: Point, press: Point): number {
+    return Math.hypot(at.x - press.x, at.y - press.y);
   }
 }

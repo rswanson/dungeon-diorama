@@ -4,7 +4,7 @@ import type { Square } from "./picking.js";
 // in Node. The scene file gives the start layout.
 
 /** The size of the board, in squares. */
-export interface BoardSize {
+interface BoardSize {
   width: number;
   depth: number;
 }

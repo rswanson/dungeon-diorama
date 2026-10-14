@@ -1,29 +1,31 @@
-import { canvasPoint, type CameraControls, type Point } from "./controls.js";
+import { canvasPoint, type CameraControls } from "./controls.js";
+import type { Point } from "./point.js";
 import { PressTracker, type PressEvent } from "./press.js";
 
-export interface PointerHandlers<T> {
+/** What a press can drag, and the steps of its drag. `SpriteDrag` is one. */
+interface DragHandlers<T> {
   /** What a press at `at` can drag, or null. It runs once for each press that can click or drag. */
   grab(at: Point): T | null;
-  /** A press and its release with less than `CLICK_SLOP` px of movement. */
-  click(at: Point): void;
   /** A press on something that can move moved `CLICK_SLOP` px or more. */
-  dragStart(grab: T, at: Point): void;
-  dragMove(at: Point): void;
+  start(grab: T, at: Point): void;
+  move(at: Point): void;
   drop(at: Point): void;
   /** Esc, a second finger, or the browser stopped the drag. */
-  dragCancel(): void;
+  cancel(): void;
 }
 
 /**
  * Finds clicks and drags on the canvas: a press of the primary button, a pen
  * or one finger. The camera controls use the other buttons and two fingers. A
- * second touch cancels the click or the drag. Keep the press rules in
- * `PressTracker`.
+ * second touch cancels the click or the drag. `click` gets a press and its
+ * release with less than `CLICK_SLOP` px of movement, with what the press
+ * grabbed. Keep the press rules in `PressTracker`.
  */
 export function attachPointer<T>(
   canvas: HTMLCanvasElement,
   controls: Pick<CameraControls, "touchCount">,
-  handlers: PointerHandlers<T>,
+  drag: DragHandlers<T>,
+  click: (grab: T | null, at: Point) => void,
 ): void {
   const tracker = new PressTracker<T>();
   const local = (e: PointerEvent): Point =>
@@ -32,22 +34,22 @@ export function attachPointer<T>(
   const run = (event: PressEvent<T>, e?: PointerEvent): void => {
     switch (event?.kind) {
       case "click":
-        handlers.click(event.at);
+        click(event.grab, event.at);
         break;
       case "drag-start":
         // The drag keeps its pointer when it leaves the canvas. The capture
         // ends by itself on the release.
         if (e) canvas.setPointerCapture(e.pointerId);
-        handlers.dragStart(event.grab, event.at);
+        drag.start(event.grab, event.at);
         break;
       case "drag-move":
-        handlers.dragMove(event.at);
+        drag.move(event.at);
         break;
       case "drop":
-        handlers.drop(event.at);
+        drag.drop(event.at);
         break;
       case "drag-cancel":
-        handlers.dragCancel();
+        drag.cancel();
         break;
     }
   };
@@ -61,15 +63,21 @@ export function attachPointer<T>(
         at,
         { touch: e.pointerType === "touch", button: e.button },
         controls.touchCount,
-        () => handlers.grab(at),
+        () => drag.grab(at),
       ),
     );
   });
 
   canvas.addEventListener("pointermove", (e) => {
-    // A move without the primary button down is the release of a press whose
-    // button went up while another button was still down: no pointerup comes.
-    run(tracker.move(e.pointerId, local(e), e.buttons), e);
+    const at = local(e);
+    // A mouse or pen move without the primary button down is the release of a
+    // press whose button went up while another button was still down: no
+    // pointerup comes. A finger has no buttons.
+    if (e.pointerType !== "touch" && (e.buttons & 1) === 0) {
+      run(tracker.release(e.pointerId, at));
+    } else {
+      run(tracker.move(e.pointerId, at), e);
+    }
   });
 
   canvas.addEventListener("pointerup", (e) => {

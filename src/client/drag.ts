@@ -1,25 +1,17 @@
-import {
-  MathUtils,
-  Mesh,
-  MeshBasicMaterial,
-  Vector3,
-  type Object3D,
-} from "three";
+import { Mesh, MeshBasicMaterial, Ray, Vector3, type Object3D } from "three";
 import type { Board } from "../shared/scene.js";
+import { standPoint } from "./board.js";
 import type { BoardState } from "./board-state.js";
-import type { BoardCamera } from "./camera.js";
-import type { Point } from "./press.js";
+import { easeOut, type BoardCamera } from "./camera.js";
 import type { SquareHighlight } from "./highlight.js";
+import type { Point } from "./point.js";
 import { pickSquare, type Square } from "./picking.js";
-import { standPoint, type SpriteLayer } from "./sprites.js";
+import type { SpriteLayer } from "./sprites.js";
 
-/** The height of a dragged sprite above the column top under it, in board units. */
-export const LIFT = 0.5;
-/** The height over a square another sprite holds, so the dragged sprite does not hide it. */
-export const LIFT_OCCUPIED = 1;
-/** The time of the drop onto a new square, and of the way back to the start square, in milliseconds. */
-export const DROP_MS = 150;
-export const RETURN_MS = 200;
+/** The height of a dragged sprite above the column top under it, in board units, or above the sprite on it. */
+const LIFT = 0.5;
+/** The time of the move of a sprite onto its square after a drop or a cancel, in milliseconds. */
+const SETTLE_MS = 150;
 
 /** The ghost outline on the start square: a pale, see-through copy of the sprite. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
@@ -29,37 +21,17 @@ const GHOST_MATERIAL = new MeshBasicMaterial({
   depthWrite: false,
 });
 
-/** What a drop does: the sprite moves to `to`, or goes back to its start square. */
-export type DropOutcome = { kind: "move"; to: Square } | { kind: "back" };
-
 /**
- * The outcome of a drop of sprite `id` on `to` (null when the pointer is off
- * the board). A free square moves the sprite there. An occupied square, no
- * square and its own square send it back to its start square.
+ * What a press took: the sprite, and the height of the grab point above its
+ * foot (`lift`, in board units). The drag aims the grab point dropped by that
+ * height, so the sprite does not jump to the square behind it.
  */
-export function dropOutcome(
-  state: BoardState,
-  id: string,
-  to: Square | null,
-): DropOutcome {
-  const from = state.squareOf(id);
-  if (!to || !from || !state.canMove(id, to)) return { kind: "back" };
-  if (to.x === from.x && to.z === from.z) return { kind: "back" };
-  return { kind: "move", to };
-}
-
-/**
- * What a press took: the sprite, and where its foot is from the pointer
- * (`offset`, in CSS pixels) at the zoom of that moment. The drag aims the
- * foot, not the pointer, so the sprite does not jump to the square behind it.
- */
-export interface Grab {
+interface Grab {
   id: string;
-  offset: Point;
-  zoom: number;
+  lift: number;
 }
 
-export interface DragParts {
+interface DragParts {
   board: Board;
   view: BoardCamera;
   sprites: SpriteLayer;
@@ -76,7 +48,6 @@ interface Settle {
   from: Vector3;
   to: Vector3;
   start: number;
-  ms: number;
 }
 
 /**
@@ -87,7 +58,6 @@ interface Settle {
  */
 export class SpriteDrag {
   private drag: {
-    id: string;
     mesh: Mesh;
     from: Square;
     ghost: Mesh;
@@ -97,21 +67,17 @@ export class SpriteDrag {
     target: Square | null;
   } | null = null;
   private settle: Settle | null = null;
+  private readonly aim = new Ray();
 
   constructor(private readonly parts: DragParts) {}
 
   /** What a press at the canvas point `at` takes: the sprite under it, or null. */
   grab(at: Point): Grab | null {
     const { board, view, sprites, state } = this.parts;
-    const id = sprites.spriteAt(view.ray(at.x, at.y));
-    const from = id === null ? undefined : state.squareOf(id);
-    if (id === null || !from) return null;
-    const foot = view.screenPoint(standPoint(board, from));
-    return {
-      id,
-      offset: { x: foot.x - at.x, y: foot.y - at.y },
-      zoom: view.camera.zoom,
-    };
+    const hit = sprites.spriteAt(view.ray(at.x, at.y));
+    const from = hit && state.squareOf(hit.id);
+    if (!hit || !from) return null;
+    return { id: hit.id, lift: hit.point.y - standPoint(board, from).y };
   }
 
   /** The square the sprite aims at now, or null off the board. */
@@ -119,20 +85,23 @@ export class SpriteDrag {
     return this.drag?.target ? { ...this.drag.target } : null;
   }
 
+  /** True while a drag runs or a sprite still moves onto its square. */
+  busy(): boolean {
+    return this.drag !== null || this.settle !== null;
+  }
+
   start(grab: Grab, at: Point): void {
     const { sprites, state, scene } = this.parts;
-    const { id } = grab;
-    const sprite = sprites.get(id);
-    const from = state.squareOf(id);
+    const sprite = sprites.get(grab.id);
+    const from = state.squareOf(grab.id);
     if (!sprite || !from) return;
     this.finishSettle();
     const ghost = new Mesh(sprite.mesh.geometry, GHOST_MATERIAL);
-    ghost.name = `ghost:${id}`;
+    ghost.name = `ghost:${grab.id}`;
     ghost.position.copy(sprite.mesh.position);
     ghost.rotation.y = sprite.mesh.rotation.y;
     scene.add(ghost);
     this.drag = {
-      id,
       mesh: sprite.mesh,
       from,
       ghost,
@@ -141,9 +110,8 @@ export class SpriteDrag {
       target: from,
     };
     // The first target is the start square, whatever a taller column in front
-    // of its foot hides. Off the board, the sprite stays at its last square.
-    this.aim(id, from);
-    this.lift(from);
+    // of its foot hides.
+    this.show(from);
     this.parts.requestDraw();
   }
 
@@ -154,28 +122,22 @@ export class SpriteDrag {
   }
 
   /**
-   * Aims at the square under the foot of the sprite: the point of the pointer
-   * and the grab offset, which grows and shrinks with the zoom. It does
-   * nothing when the square is the same.
+   * Aims at the square under the grab point dropped by its lift: the ray of
+   * the pointer, moved down by the lift. The camera is orthographic, so this
+   * holds at each zoom, turn and size. It does nothing when the square is the
+   * same.
    */
   private retarget(): void {
     const drag = this.drag;
     if (!drag) return;
     const { board, view } = this.parts;
-    const scale = view.camera.zoom / drag.grab.zoom;
     const { pointer, grab } = drag;
-    const square = pickSquare(
-      board,
-      view.ray(
-        pointer.x + grab.offset.x * scale,
-        pointer.y + grab.offset.y * scale,
-      ),
-    );
+    this.aim.copy(view.ray(pointer.x, pointer.y));
+    this.aim.origin.y -= grab.lift;
+    const square = pickSquare(board, this.aim);
     if (sameSquare(square, drag.target)) return;
     drag.target = square;
-    this.aim(drag.id, square);
-    // Off the board, the sprite stays at its last square on the board.
-    if (square) this.lift(square);
+    this.show(square);
     this.parts.requestDraw();
   }
 
@@ -184,21 +146,21 @@ export class SpriteDrag {
     if (!drag) return;
     this.move(at);
     this.end();
-    this.onDrop(drag.id, drag.from, drag.target);
+    this.onDrop(drag.grab.id, drag.target);
   }
 
   cancel(): void {
     const drag = this.drag;
     if (!drag) return;
     this.end();
-    this.settleOn(drag.mesh, drag.from, RETURN_MS);
+    this.settleOn(drag.mesh, drag.from);
   }
 
   /**
-   * Moves a drop or a return on to the time `now`, turns the ghost to the
-   * camera, and aims again, as a turn, a zoom or a resize moves the board
-   * under a pointer that did not move. Call it on each draw. It returns true
-   * while a sprite still moves.
+   * Moves a settle on to the time `now`, turns the ghost to the camera, and
+   * aims again, as a turn, a zoom or a resize moves the board under a pointer
+   * that did not move. Call it on each draw. It returns true while a sprite
+   * still moves.
    */
   frame(now: number, azimuth: number): boolean {
     if (this.drag) {
@@ -208,55 +170,52 @@ export class SpriteDrag {
     return this.step(now);
   }
 
-  /** Moves a drop or a return on to the time `now`. It returns true while it goes on. */
+  /** Moves a settle on to the time `now`. It returns true while it goes on. */
   private step(now: number): boolean {
     const settle = this.settle;
     if (!settle) return false;
-    const t = MathUtils.clamp((now - settle.start) / settle.ms, 0, 1);
-    // Ease out: fast at the start, slow onto the square.
-    settle.mesh.position.lerpVectors(settle.from, settle.to, 1 - (1 - t) ** 3);
+    const t = (now - settle.start) / SETTLE_MS;
+    settle.mesh.position.lerpVectors(settle.from, settle.to, easeOut(t));
     settle.mesh.updateMatrixWorld();
     if (t < 1) return true;
     this.settle = null;
     return false;
   }
 
-  /** The square under the pointer changed. B6 adds the path line here. */
-  private aim(id: string, square: Square | null): void {
-    const { highlight, state } = this.parts;
+  /**
+   * Shows the target `square`: it glows, green when it is free and red when
+   * another sprite holds it, and the dragged sprite goes above its center,
+   * also above the sprite on it. Off the board (null), the glow goes and the
+   * sprite stays at its last square.
+   */
+  private show(square: Square | null): void {
+    const drag = this.drag;
+    if (!drag) return;
+    const { board, sprites, state, highlight } = this.parts;
     if (!square) {
       highlight.hide();
       return;
     }
-    highlight.show(square, state.canMove(id, square) ? "free" : "occupied");
+    const free = state.canMove(drag.grab.id, square);
+    highlight.show(square, free ? "free" : "occupied");
+    const other = free ? null : state.occupant(square.x, square.z);
+    const under = other === null ? 0 : (sprites.get(other)?.height ?? 0);
+    standPoint(board, square, drag.mesh.position).y += LIFT + under;
+    drag.mesh.updateMatrixWorld();
   }
 
   /**
-   * The one way a drop ends: the board state moves the sprite to a free
-   * square, or the sprite goes back to `from`. B7 saves the move here.
+   * The one way a drop ends: the sprite moves to `to` when it is free, or
+   * goes back to its start square. A move to its own square changes nothing.
    */
-  private onDrop(id: string, from: Square, to: Square | null): void {
-    const sprite = this.parts.sprites.get(id);
-    if (!sprite) return;
-    const outcome = dropOutcome(this.parts.state, id, to);
-    if (outcome.kind === "move") {
-      this.parts.state.move(id, outcome.to);
-      this.settleOn(sprite.mesh, outcome.to, DROP_MS);
-    } else {
-      this.settleOn(sprite.mesh, from, RETURN_MS);
-    }
-  }
-
-  /** Puts the dragged sprite above the center of `square`, higher over a sprite. */
-  private lift(square: Square): void {
-    const drag = this.drag;
-    if (!drag) return;
-    const { board, state } = this.parts;
-    const free = state.canMove(drag.id, square);
-    standPoint(board, square, drag.mesh.position).y += free
-      ? LIFT
-      : LIFT_OCCUPIED;
-    drag.mesh.updateMatrixWorld();
+  private onDrop(id: string, to: Square | null): void {
+    const { sprites, state } = this.parts;
+    const sprite = sprites.get(id);
+    const from = state.squareOf(id);
+    if (!sprite || !from) return;
+    const dest = to && state.canMove(id, to) ? to : from;
+    state.move(id, dest);
+    this.settleOn(sprite.mesh, dest);
   }
 
   /** Takes away the ghost and the glow. The sprite stays where it is. */
@@ -264,18 +223,17 @@ export class SpriteDrag {
     const drag = this.drag;
     if (!drag) return;
     this.parts.scene.remove(drag.ghost);
-    this.aim(drag.id, null);
+    this.parts.highlight.hide();
     this.drag = null;
   }
 
-  private settleOn(mesh: Mesh, square: Square, ms: number): void {
+  private settleOn(mesh: Mesh, square: Square): void {
     this.finishSettle();
     this.settle = {
       mesh,
       from: mesh.position.clone(),
       to: standPoint(this.parts.board, square),
       start: performance.now(),
-      ms,
     };
     this.parts.requestDraw();
   }

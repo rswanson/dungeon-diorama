@@ -4,8 +4,10 @@ import {
   Float32BufferAttribute,
   Mesh,
   MeshStandardMaterial,
+  Vector3,
 } from "three";
 import type { Board } from "../shared/scene.js";
+import type { Square } from "./picking.js";
 
 // Board units: one square is one unit wide. Square [x, z] covers x to x + 1
 // and z to z + 1. The base of the board is at y = 0.
@@ -45,6 +47,15 @@ const SIDES = [
 /** The y of a column's top face: the base layer plus `height` layers. */
 export function columnTop(height: number): number {
   return (height + 1) * LAYER_HEIGHT;
+}
+
+/** The point where a sprite stands on a square: the center of the column top. */
+export function standPoint(
+  board: Board,
+  { x, z }: Square,
+  out = new Vector3(),
+): Vector3 {
+  return out.set(x + 0.5, columnTop(Number(board.heights[z][x])), z + 0.5);
 }
 
 /** The height (0–9) of square [x, z], or undefined off the board. */

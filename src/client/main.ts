@@ -172,22 +172,15 @@ function showBoard(file: SceneFile): void {
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
 
-  attachPointer(canvas, controls, {
-    grab: (at) => drag.grab(at),
-    dragStart: (id, at) => drag.start(id, at),
-    dragMove: (at) => drag.move(at),
-    drop: (at) => drag.drop(at),
-    dragCancel: () => drag.cancel(),
-    click(at) {
-      const id = sprites.spriteAt(view.ray(at.x, at.y));
-      const sprite = id === null ? undefined : sprites.get(id);
-      if (sprite) {
-        label.show(sprite.mesh, sprite.height + LABEL_GAP, sprite.spec.name);
-      } else {
-        label.hide();
-      }
-      requestDraw();
-    },
+  // A click shows the name of the sprite that the press grabbed.
+  attachPointer(canvas, controls, drag, (grab) => {
+    const sprite = grab && sprites.get(grab.id);
+    if (sprite) {
+      label.show(sprite.mesh, sprite.height + LABEL_GAP, sprite.spec.name);
+    } else {
+      label.hide();
+    }
+    requestDraw();
   });
 
   draw();

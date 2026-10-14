@@ -13,15 +13,20 @@ describe("PressTracker clicks", () => {
     tracker.move(1, { x: 11, y: 10 });
     expect(tracker.up(1, { x: 11, y: 10 })).toEqual({
       kind: "click",
+      grab: null,
       at: { x: 11, y: 10 },
     });
   });
 
-  it("makes a click of a press on a sprite that does not move", () => {
+  it("makes a click, with what the press grabbed, of a press on a sprite that does not move", () => {
     const tracker = new PressTracker<string>();
     tracker.down(1, { x: 10, y: 10 }, MOUSE, 0, FIGHTER);
     expect(tracker.move(1, { x: 12, y: 10 })).toBeNull();
-    expect(tracker.up(1, { x: 12, y: 10 })?.kind).toBe("click");
+    expect(tracker.up(1, { x: 12, y: 10 })).toEqual({
+      kind: "click",
+      grab: "fighter",
+      at: { x: 12, y: 10 },
+    });
   });
 
   it("makes no click when the pointer moves past the slop", () => {
@@ -145,36 +150,33 @@ describe("PressTracker drags", () => {
     expect(tracker.cancel(1)).toEqual({ kind: "drag-cancel" });
     expect(tracker.up(1, { x: 10, y: 40 })).toBeNull();
   });
+});
 
-  it("keeps the drag when a move says another button is down too", () => {
-    const tracker = dragging();
-    // 3 is the primary and the secondary button.
-    expect(tracker.move(1, { x: 10, y: 30 }, 3)).toEqual({
-      kind: "drag-move",
-      at: { x: 10, y: 30 },
-    });
-  });
-
-  it("drops when a move says the primary button is up and another is down", () => {
-    const tracker = dragging();
-    // The browser sends no pointerup for the primary button here, only this move.
-    expect(tracker.move(1, { x: 10, y: 30 }, 2)).toEqual({
+// A release with no pointerup: the primary button went up while another
+// button was still down, so the browser sends only a move.
+describe("PressTracker.release", () => {
+  it("drops the drag, and the pointerup after it does nothing", () => {
+    const tracker = new PressTracker<string>();
+    tracker.down(1, { x: 10, y: 10 }, MOUSE, 0, FIGHTER);
+    tracker.move(1, { x: 10, y: 10 + CLICK_SLOP });
+    expect(tracker.release(1, { x: 10, y: 30 })).toEqual({
       kind: "drop",
       at: { x: 10, y: 30 },
     });
     expect(tracker.up(1, { x: 10, y: 30 })).toBeNull();
   });
 
-  it("ends a press that is not a drag when a move says the primary button is up", () => {
+  it("ends a press that is not a drag, with no click", () => {
     const tracker = new PressTracker<string>();
     tracker.down(1, { x: 10, y: 10 }, MOUSE, 0, FIGHTER);
-    expect(tracker.move(1, { x: 10, y: 11 }, 0)).toBeNull();
+    expect(tracker.release(1, { x: 10, y: 11 })).toBeNull();
     expect(tracker.up(1, { x: 10, y: 11 })).toBeNull();
   });
 
-  it("does not read the buttons of a touch move", () => {
+  it("does nothing to the press of another pointer", () => {
     const tracker = new PressTracker<string>();
-    tracker.down(7, { x: 5, y: 5 }, TOUCH, 1, FIGHTER);
-    expect(tracker.move(7, { x: 5, y: 25 }, 0)?.kind).toBe("drag-start");
+    tracker.down(1, { x: 10, y: 10 }, MOUSE, 0, NOTHING);
+    expect(tracker.release(2, { x: 10, y: 10 })).toBeNull();
+    expect(tracker.up(1, { x: 10, y: 10 })?.kind).toBe("click");
   });
 });

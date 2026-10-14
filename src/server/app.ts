@@ -2,7 +2,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 
-export interface AppOptions {
+interface AppOptions {
   /** The folder of the built client. Without it, the app serves only the API. */
   clientDir?: string;
 }

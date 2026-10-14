@@ -1,27 +1,11 @@
 import { Vector3 } from "three";
 import type { Board } from "../shared/scene.js";
+import type { Diorama } from "../shared/diorama.js";
+import { standPoint } from "./board.js";
 import type { BoardState } from "./board-state.js";
 import type { BoardCamera } from "./camera.js";
 import type { SpriteDrag } from "./drag.js";
-import { standPoint, type SpriteLayer } from "./sprites.js";
-
-/**
- * A small read-only view of the board on `window.diorama`. It exists for tests
- * (the Playwright drag test) and for agents that drive a browser. It changes
- * nothing. Each point is in CSS pixels from the top left of the canvas.
- */
-export interface Diorama {
-  /** True when each sprite of the scene stands on the board. */
-  readonly ready: boolean;
-  /** The point on the screen of the center of the top of square [x, z], or null for a square off the board. */
-  squareScreen(x: number, z: number): { x: number; y: number } | null;
-  /** The point on the screen of the middle of a sprite's body, or null for an unknown sprite. */
-  spriteScreen(id: string): { x: number; y: number } | null;
-  /** The square `[x, z]` where a sprite stands at rest, or null while it is lifted, moves or did not load. */
-  spriteSquare(id: string): [number, number] | null;
-  /** The square `[x, z]` the dragged sprite aims at, or null when no drag runs or the pointer is off the board. */
-  dragTarget(): [number, number] | null;
-}
+import type { SpriteLayer } from "./sprites.js";
 
 declare global {
   interface Window {
@@ -29,6 +13,7 @@ declare global {
   }
 }
 
+/** Puts the read-only view of the board (`Diorama`) on `window.diorama`. */
 export function exposeDiorama(parts: {
   board: Board;
   view: BoardCamera;
@@ -59,12 +44,8 @@ export function exposeDiorama(parts: {
     },
     spriteSquare(id: string): [number, number] | null {
       const square = state.squareOf(id);
-      const sprite = sprites.get(id);
-      if (!square || !sprite) return null;
-      const rest = standPoint(board, square);
-      return sprite.mesh.position.distanceTo(rest) < 1e-6
-        ? [square.x, square.z]
-        : null;
+      if (drag.busy() || !square || !sprites.get(id)) return null;
+      return [square.x, square.z];
     },
     dragTarget(): [number, number] | null {
       const square = drag.target();
