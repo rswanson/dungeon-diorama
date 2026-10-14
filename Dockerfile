@@ -10,9 +10,11 @@ FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
+# dist/server/migrations holds the SQL migrations: the build copies them there.
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./
 USER node
-# The server listens on $PORT, or on 3000 when PORT is not set.
+# The server listens on $PORT, or on 3000 when PORT is not set. It needs
+# DATABASE_URL: it exits when it cannot reach that database.
 EXPOSE 3000
 CMD ["node", "dist/server/index.js"]

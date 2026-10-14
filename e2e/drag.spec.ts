@@ -108,18 +108,28 @@ async function grab(
   };
 }
 
-test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+/** Waits until the board and each sprite show. */
+async function ready(page: Page): Promise<void> {
   // Each sprite stands on the board only when WebGL works.
   await expect
     .poll(() => hook(page, "ready"), {
       message: "the board and its sprites show",
     })
     .toBe(true);
+}
+
+// Each test has a browser context of its own, so it is a new visitor with no
+// saved moves: the fighter stands on its square of the scene file.
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await ready(page);
   expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
 });
 
-test("a drag puts the fighter on a free square", async ({ page }) => {
+test("a drag puts the fighter on a free square, and it stays after a reload", async ({
+  page,
+  browser,
+}) => {
   const held = await grab(page, "fighter");
   // Just past the slop, the pointer is still at the grab point: the fighter
   // aims at its own square, not at the square behind its body.
@@ -130,8 +140,58 @@ test("a drag puts the fighter on a free square", async ({ page }) => {
   await held.moveTo(FREE);
   expect(await hook(page, "dragTarget")).toEqual(FREE);
   await page.mouse.up();
+  // The fighter is at rest on its square only once the move saved.
   await expect.poll(() => hook(page, "spriteSquare", "fighter")).toEqual(FREE);
   expect(await hook(page, "dragTarget")).toBeNull();
+  await expect(page.locator(".notice")).toBeEmpty();
+
+  await page.reload();
+  await ready(page);
+  expect(await hook(page, "spriteSquare", "fighter")).toEqual(FREE);
+
+  // Another visitor sees the scene file layout.
+  const other = await browser.newContext();
+  try {
+    const stranger = await other.newPage();
+    await stranger.goto("/");
+    await ready(stranger);
+    expect(await hook(stranger, "spriteSquare", "fighter")).toEqual(FIGHTER);
+  } finally {
+    await other.close();
+  }
+});
+
+test("a move that does not save puts the fighter back with a notice", async ({
+  page,
+}) => {
+  await page.route("**/api/scenes/*/sprites/*/position", (route) =>
+    route.fulfill({ status: 500, json: { error: "The server failed." } }),
+  );
+  const held = await grab(page, "fighter");
+  await held.moveTo(FREE);
+  await page.mouse.up();
+  await expect(page.getByRole("status")).toHaveText("Move not saved");
+  await expect
+    .poll(() => hook(page, "spriteSquare", "fighter"))
+    .toEqual(FIGHTER);
+});
+
+test("the scene file layout shows when the saved moves do not load", async ({
+  page,
+}) => {
+  await page.route("**/api/scenes/*/positions", (route) =>
+    route.fulfill({ status: 503, body: "" }),
+  );
+  await page.reload();
+  await ready(page);
+  await expect(page.getByRole("status")).toHaveText("Saved moves did not load");
+  expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
+  // A drag still works and saves.
+  await page.unrouteAll();
+  const held = await grab(page, "fighter");
+  await held.moveTo(FREE);
+  await page.mouse.up();
+  await expect.poll(() => hook(page, "spriteSquare", "fighter")).toEqual(FREE);
 });
 
 test("a drop on the goblin's square puts the fighter back", async ({

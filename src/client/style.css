@@ -116,6 +116,32 @@ body {
   margin-top: 4px;
 }
 
+.notice {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  z-index: 2;
+  box-sizing: border-box;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 6px 14px;
+  border: 3px double var(--ink);
+  border-radius: 4px;
+  background: var(--parchment);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.notice:empty {
+  display: none;
+}
+
 .board-label {
   position: fixed;
   top: 0;

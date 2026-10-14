@@ -12,6 +12,8 @@ interface BoardSize {
 /** The record of the square of each sprite. One sprite stands on each square at most. */
 export class BoardState {
   private readonly squares = new Map<string, Square>();
+  /** The squares that a sprite keeps until its move saves, by "x,z": the id of that sprite. */
+  private readonly holds = new Map<string, string>();
 
   constructor(
     private readonly size: BoardSize,
@@ -62,13 +64,56 @@ export class BoardState {
   }
 
   /**
-   * True when the sprite can stand on `to`: the square is on the board and no
-   * other sprite stands on it. Its own square is true: a move there changes nothing.
+   * True when the sprite can stand on `to`: the square is on the board, no
+   * other sprite stands on it, and no other sprite holds it. Its own square is
+   * true: a move there changes nothing.
    */
   canMove(id: string, to: Square): boolean {
     if (!this.squares.has(id) || !this.onBoard(to)) return false;
     const other = this.occupant(to.x, to.z);
-    return other === null || other === id;
+    const holder = this.holds.get(`${to.x},${to.z}`);
+    return (other === null || other === id) && (holder ?? id) === id;
+  }
+
+  /**
+   * Keeps `square` for sprite `id`: no other sprite can move there until
+   * `release`. A sprite holds its start square while its move saves, so it
+   * can go back there when the save fails.
+   */
+  hold(id: string, square: Square): void {
+    this.holds.set(`${square.x},${square.z}`, id);
+  }
+
+  /** Ends the hold of sprite `id` on `square`. */
+  release(id: string, square: Square): void {
+    const key = `${square.x},${square.z}`;
+    if (this.holds.get(key) === id) this.holds.delete(key);
+  }
+
+  /**
+   * Puts each sprite on its square in `layout`, by sprite id, all at once. A
+   * sprite that `layout` does not list stays where it is. It throws, and
+   * changes nothing, when the result puts a sprite off the board or two
+   * sprites on one square.
+   */
+  place(layout: Readonly<Record<string, readonly [number, number]>>): void {
+    const next = new Map(this.squares);
+    for (const id of this.squares.keys()) {
+      if (!Object.hasOwn(layout, id)) continue;
+      const [x, z] = layout[id];
+      next.set(id, { x, z });
+    }
+    const seen = new Set<string>();
+    for (const [id, square] of next) {
+      const key = `${square.x},${square.z}`;
+      if (!this.onBoard(square) || seen.has(key)) {
+        throw new Error(
+          `The layout cannot put "${id}" on square [${square.x}, ${square.z}].`,
+        );
+      }
+      seen.add(key);
+    }
+    for (const [id, square] of next) this.squares.set(id, square);
   }
 
   /** Puts the sprite on `to`. It throws when `canMove` is false. */

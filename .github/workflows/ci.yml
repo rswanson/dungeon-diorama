@@ -15,6 +15,24 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # The API tests, the end-to-end test and the smoke test use this database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dd
+          POSTGRES_PASSWORD: dd
+          POSTGRES_DB: dd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dd -d dd"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://dd:dd@localhost:5432/dd
+      TEST_DATABASE_URL: postgres://dd:dd@localhost:5432/dd
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -38,8 +56,21 @@ jobs:
       - name: Smoke test the container
         run: |
           set -euo pipefail
-          docker run -d --name dd -e PORT=4100 -p 4100:4100 dungeon-diorama:ci
+          # The host network lets the container reach the Postgres service on localhost.
+          docker run -d --name dd --network host -e PORT=4100 -e DATABASE_URL dungeon-diorama:ci
           curl -fsS --retry 20 --retry-all-errors --retry-delay 1 http://localhost:4100/healthz
           curl -fsS http://localhost:4100/ | grep -q "Dungeon Diorama"
+          # The migrations ran: the API reads the positions table.
+          curl -fsS http://localhost:4100/api/scenes/demo/positions | grep -q '"fighter"'
           docker stop dd
           test "$(docker inspect -f '{{.State.ExitCode}}' dd)" = 0
+      - name: Check that the server exits when it cannot reach the database
+        run: |
+          set -uo pipefail
+          docker run --name dd-nodb -e DATABASE_URL=postgres://dd:dd@127.0.0.1:1/dd dungeon-diorama:ci
+          test "$(docker inspect -f '{{.State.ExitCode}}' dd-nodb)" = 1
+      - name: Show the container logs
+        if: failure()
+        run: |
+          docker logs dd || true
+          docker logs dd-nodb || true
