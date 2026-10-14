@@ -9,7 +9,7 @@ Dungeon Diorama is a web RPG engine. It shows voxel sprites on a 3D square-grid 
 - Database (from batch B7): Postgres through the `pg` package, with plain SQL migrations.
 - Tests: Vitest for unit and API tests. Playwright for the end-to-end test (from batch B5).
 - Lint and format: ESLint (flat config, `typescript-eslint`) and Prettier.
-- Host: Caster, project `dungeon-diorama`. Caster deploys each push to `main`.
+- Host: Caster, project `dungeon-diorama`, in the owner's Caster account. Deploy on push is off. After each merge to `main`, Claude deploys `main` through Caster's MCP server (below).
 
 ## Layout
 
@@ -57,3 +57,4 @@ In dev, Vite sends `/api` and `/healthz` to the server on port 3000.
 - Run `npm run check` and `npm run build` before you push.
 - Do not change an approved spec or batch plan in `docs/` without the owner. The `Status` line of each batch is the exception: update it as the batch moves. Prettier does not format `docs/`.
 - Claude may merge its own PRs in this repo once CI is green and the review is clean (the owner allowed this on 2026-10-14).
+- After each merge to `main`, deploy it: run Caster's `setup-project` tool with `project: dungeon-diorama`, `repo: rswanson/dungeon-diorama` and `git_ref: main`. When it answers `working`, call `wait` with its run id until it finishes. Then check `https://dungeon-diorama-kind-orchard.caster.app/healthz` and the change on the live page.

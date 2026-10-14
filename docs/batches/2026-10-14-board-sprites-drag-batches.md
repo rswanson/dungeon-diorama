@@ -3,25 +3,25 @@
 Spec: `docs/specs/2026-10-14-board-sprites-drag-spec.md` (APPROVED)
 Date: 2026-10-14
 
-Each batch merges to `main` with CI green, and Caster deploys `main` from B1 on. Each batch assumes the batches before it are merged.
+Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main` through Caster's MCP (`setup-project` with `project: dungeon-diorama`). Each batch assumes the batches before it are merged.
 
 ## B1: Live skeleton on Caster
 
-- **Status:** in-progress
-- **User-visible outcome:** The Caster address for `dungeon-diorama` shows a full-window Three.js canvas with a dark background and a title "Dungeon Diorama". Each merge to `main` updates it.
+- **Status:** merged
+- **User-visible outcome:** The Caster address for `dungeon-diorama` shows a full-window Three.js canvas with a dark background and a title "Dungeon Diorama".
 - **Acceptance criteria:**
   1. `npm run dev` opens the page locally with the canvas and the title, with no console errors.
   2. `npm run build` then `npm start` serves the same page from the Hono server on `PORT` (default 3000).
   3. `GET /healthz` answers `200`.
   4. `npm run check` passes: type check, lint, unit tests (one test of the server's `/healthz`).
   5. GitHub Actions runs `npm run check` and `npm run build` on each pull request, and both pass.
-  6. Caster project `dungeon-diorama` is live from `rswanson/dungeon-diorama`, deploys on each push to `main`, and its address shows the page.
+  6. Caster project `dungeon-diorama` is live from `rswanson/dungeon-diorama`, and its address shows the page.
 - **How to observe:** Open the Caster address.
 - **Touches:** `package.json`, `tsconfig*.json`, `vite.config.ts`, `index.html`, `src/client/main.ts`, `src/server/*`, `.github/workflows/ci.yml`, `README.md`, Caster project setup.
 
 ## B2: Demo board from the scene file
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** The page shows the demo board: a 16x12 grid of voxel columns with height changes and four materials, grid lines on the tops, one sun light with shadows, in a fixed isometric view.
 - **Acceptance criteria:**
   1. `public/scenes/demo.json` follows the spec's scene format: 16x12, heights 0–9 used with steps and ledges, materials stone, grass, dirt, water.
