@@ -10,6 +10,26 @@
   <body>
     <h1 class="title">Dungeon Diorama</h1>
     <canvas id="scene" aria-label="Game board"></canvas>
+    <div class="hud" hidden>
+      <button
+        type="button"
+        data-turn="left"
+        aria-label="Turn left"
+        aria-keyshortcuts="Q"
+        title="Turn left (Q)"
+      >
+        ↺
+      </button>
+      <button
+        type="button"
+        data-turn="right"
+        aria-label="Turn right"
+        aria-keyshortcuts="E"
+        title="Turn right (E)"
+      >
+        ↻
+      </button>
+    </div>
     <script type="module" src="/src/client/main.ts"></script>
   </body>
 </html>

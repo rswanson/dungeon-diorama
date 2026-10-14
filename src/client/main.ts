@@ -16,7 +16,9 @@ import {
 } from "../shared/scene.js";
 import { createBoardMesh } from "./board.js";
 import { BoardCamera } from "./camera.js";
+import { attachCameraControls } from "./controls.js";
 import { showErrorPanel } from "./errors.js";
+import { showTurnButtons } from "./hud.js";
 import "./style.css";
 
 const DUNGEON = new Color("#14110f");
@@ -103,28 +105,38 @@ function showBoard(file: SceneFile): void {
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
 
-  function draw(): void {
+  let size = "";
+  function draw(now: number): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
     // Browser zoom or a move to another display changes the ratio.
     const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
-    if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
-    renderer.setSize(width, height, false);
-    view.resize(width, height);
+    if (`${width}x${height}@${ratio}` !== size) {
+      size = `${width}x${height}@${ratio}`;
+      if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
+      renderer.setSize(width, height, false);
+      view.resize(width, height);
+    }
+    // A turn draws again on each frame until it ends.
+    if (view.tick(now)) requestDraw();
     renderer.render(scene, view.camera);
   }
 
-  // Several resize events in one frame cause one draw.
+  // The page draws only after a change. Several changes in one frame cause one draw.
   let drawQueued = false;
-  window.addEventListener("resize", () => {
+  function requestDraw(): void {
     if (drawQueued) return;
     drawQueued = true;
-    requestAnimationFrame(() => {
+    requestAnimationFrame((now) => {
       drawQueued = false;
-      draw();
+      draw(now);
     });
-  });
-  draw();
+  }
+
+  window.addEventListener("resize", requestDraw);
+  attachCameraControls(canvas, view, requestDraw);
+  showTurnButtons(view, requestDraw);
+  draw(performance.now());
 }
 
 async function main(): Promise<void> {
