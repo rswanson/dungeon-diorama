@@ -1,6 +1,6 @@
 # Board, sprites and drag-move — spec
 
-Status: DRAFT
+Status: APPROVED
 Date: 2026-10-14
 
 ## Goals / Non-goals
