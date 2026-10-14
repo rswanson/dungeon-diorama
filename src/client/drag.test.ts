@@ -57,6 +57,7 @@ function stage(
     sprites: layer,
     state,
     highlight,
+    path: { show() {}, follow() {}, hide() {} },
     scene,
     requestDraw: () => {},
   });

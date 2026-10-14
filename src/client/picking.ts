@@ -1,12 +1,10 @@
 import type { Ray } from "three";
 import type { Board } from "../shared/scene.js";
+import type { Square } from "../shared/path.js";
 import { columnTop } from "./board.js";
 
-/** A square of the board, by its column and its row. */
-export interface Square {
-  x: number;
-  z: number;
-}
+// The type is in src/shared/path.ts, so the shared path code can use it too.
+export type { Square };
 
 /** The top of the highest column a board can have (height 9). */
 const HIGHEST = columnTop(9);

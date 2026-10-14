@@ -15,4 +15,10 @@ export interface Diorama {
   spriteSquare(id: string): [number, number] | null;
   /** The square `[x, z]` the dragged sprite aims at, or null when no drag runs or the pointer is off the board. */
   dragTarget(): [number, number] | null;
+  /**
+   * The route that the path line of the drag shows: its squares `[x, z]` from
+   * the start square to the target and its length in feet, "none" when the
+   * label says "No path", or null when no route shows.
+   */
+  dragPath(): { squares: [number, number][]; feet: number } | "none" | null;
 }
