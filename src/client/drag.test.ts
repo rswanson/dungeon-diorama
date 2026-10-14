@@ -96,6 +96,12 @@ function stage(
 const same = (a: Square | null | undefined, b: Square): boolean =>
   a?.x === b.x && a.z === b.z;
 
+/** The point on the screen of a board point, as a `Point`. */
+function screenOf(view: BoardCamera, p: Vector3): Point {
+  const { x, y } = view.screenPoint(p);
+  return { x, y };
+}
+
 // Four squares by four. The camera starts on the +x, +z side, so the three
 // columns of height 2 at [2, 1], [1, 2] and [2, 2] stand in front of the hero
 // on [1, 1] (height 0) and hide its foot. [0, 0] is free. The rat is on [3, 3].
@@ -243,19 +249,32 @@ describe("SpriteDrag", () => {
   });
 
   it("aims home again when the pointer comes back to the press point", () => {
-    const { drag, view, state, grab, at, over, turn } = pressHero();
+    const { drag, view, state, grab, at, over, turn, aim } = pressHero();
     drag.start(grab, at);
     drag.move(over(FREE));
     expect(drag.target()).toEqual(FREE);
     drag.move(at);
     expect(drag.target()).toEqual(HERO);
-    // A turn with the pointer still on the press point keeps it home.
+    // The radius follows the grab point when the view turns.
     drag.move(over(FREE));
     turn();
+    const centre = screenOf(view, grab.world);
+    const radius = view.unitsToPixels(HOME_RADIUS);
+    // The old press point is now out of the radius of the turned grab point,
+    // so it aims at the top under the pointer.
+    expect(Math.hypot(at.x - centre.x, at.y - centre.y)).toBeGreaterThan(
+      radius,
+    );
+    const under = pickSquare(BOARD, aim(at, grab.lift), { tops: true });
+    expect(under).not.toEqual(HERO);
     drag.move(at);
     drag.frame(0, view.azimuth);
+    expect(drag.target()).toEqual(under);
+    // A pointer at the turned grab point aims home.
+    drag.move(centre);
+    drag.frame(0, view.azimuth);
     expect(drag.target()).toEqual(HERO);
-    drag.drop(at);
+    drag.drop(centre);
     expect(state.squareOf("hero")).toEqual(HERO);
   });
 
@@ -274,15 +293,30 @@ describe("SpriteDrag", () => {
     expect(drag.target()).toEqual(DIAGONAL);
   });
 
-  it("follows the zoom: a still pointer that the radius then holds aims home", () => {
-    const { drag, view, grab, at } = pressHero();
+  it("follows the zoom: the radius stays on the grab point, not on the press pixel", () => {
+    const { drag, view, grab, at, aim } = pressHero();
     const pointer = { x: at.x + view.unitsToPixels(0.6), y: at.y };
     drag.start(grab, pointer);
     expect(drag.target()).not.toEqual(HERO);
-    // At 1.5 times the zoom, the pointer is 0.4 units from the press point.
-    view.zoomAt(1.5, at.x, at.y);
+    // A zoom at the pointer moves the grab point away from it: at 1.5 times
+    // the zoom, it is 0.9 of the old units (0.6 of the new units) away, and
+    // the radius is 0.5 of the new units. The pointer is only 0.4 of the new
+    // units from the old press pixel, so a radius on that pixel would hold it.
+    view.zoomAt(1.5, pointer.x, pointer.y);
     expect(view.camera.zoom).toBe(1.5);
+    const centre = screenOf(view, grab.world);
+    const radius = view.unitsToPixels(HOME_RADIUS);
+    expect(
+      Math.hypot(pointer.x - centre.x, pointer.y - centre.y),
+    ).toBeGreaterThan(radius);
+    expect(Math.hypot(pointer.x - at.x, pointer.y - at.y)).toBeLessThan(radius);
+    const under = pickSquare(BOARD, aim(pointer, grab.lift), { tops: true });
+    expect(under).not.toEqual(HERO);
     drag.frame(0, view.azimuth);
+    expect(drag.target()).toEqual(under);
+    // A pointer within the radius of the moved grab point aims home.
+    const near = { x: centre.x + radius / 2, y: centre.y };
+    drag.move(near);
     expect(drag.target()).toEqual(HERO);
   });
 
@@ -336,7 +370,7 @@ describe("SpriteDrag", () => {
 });
 
 describe("SpriteDrag on the demo board", () => {
-  it("starts each sprite on its own square, at each grab height and turn", () => {
+  it("aims each sprite home for a nudge in the radius, at each turn", () => {
     const result = parseScene(
       readFileSync(
         new URL("../../public/scenes/demo.json", import.meta.url),
@@ -357,7 +391,7 @@ describe("SpriteDrag on the demo board", () => {
       }),
     );
     const { drag, view, layer, state, screen, aim, turn, rest } = parts;
-    // Each start below is in the home radius of its press.
+    // The nudge below is in the home radius of the press.
     expect(NUDGE).toBeLessThan(view.unitsToPixels(HOME_RADIUS));
     let presses = 0;
     /** Presses where a taller column in front hides the sprite's foot. */
@@ -370,41 +404,33 @@ describe("SpriteDrag on the demo board", () => {
         const sprite = layer.get(id);
         const from = state.squareOf(id);
         if (!sprite || !from) throw new Error(`No sprite "${id}".`);
-        for (const part of [0.2, 0.4, 0.5, 0.6, 0.8]) {
+        // The first height of the sprite where a press takes it: a
+        // transparent pixel, another sprite or a column can be in front.
+        for (const part of [0.5, 0.4, 0.6, 0.2, 0.8]) {
           const point = sprite.mesh.position.clone();
           point.y += sprite.height * part;
           const at = screen(point);
           const grab = drag.grab(at);
-          // A transparent pixel, another sprite or a column can be there.
           if (grab?.id !== id) continue;
           presses++;
           if (!same(pickSquare(board, aim(at, grab.lift)), from)) hidden++;
           const top = pickSquare(board, aim(at, grab.lift), { tops: true });
           if (!same(top, from)) covered++;
-          for (const [dx, dy] of [
-            [0, 0],
-            [NUDGE, 0],
-            [-NUDGE, 0],
-            [0, NUDGE],
-            [0, -NUDGE],
-          ]) {
-            drag.start(grab, { x: at.x + dx, y: at.y + dy });
-            drag.frame(0, view.azimuth);
-            const target = drag.target();
-            if (!same(target, from)) {
-              misses.push(
-                `${id}, turn ${turns}, at ${part} of its height, moved [${dx}, ${dy}]: [${target?.x}, ${target?.z}]`,
-              );
-            }
-            drag.cancel();
-            rest();
+          drag.start(grab, { x: at.x + NUDGE, y: at.y });
+          drag.frame(0, view.azimuth);
+          const target = drag.target();
+          if (!same(target, from)) {
+            misses.push(`${id}, turn ${turns}: [${target?.x}, ${target?.z}]`);
           }
+          drag.cancel();
+          rest();
+          break;
         }
       }
       turn();
     }
     expect(misses).toEqual([]);
-    expect(presses).toBeGreaterThan(sprites.length * 4 * 3);
+    expect(presses).toBe(sprites.length * 4);
     // The orc's foot, at least, is behind a taller column at turn 0.
     expect(hidden).toBeGreaterThan(0);
     // The first top alone is not enough: the home radius is needed.

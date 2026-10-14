@@ -1,4 +1,11 @@
-import { Mesh, MeshBasicMaterial, Ray, Vector3, type Object3D } from "three";
+import {
+  Mesh,
+  MeshBasicMaterial,
+  Ray,
+  Vector2,
+  Vector3,
+  type Object3D,
+} from "three";
 import type { Board } from "../shared/scene.js";
 import { standPoint } from "./board.js";
 import type { BoardState } from "./board-state.js";
@@ -29,14 +36,16 @@ const GHOST_MATERIAL = new MeshBasicMaterial({
 
 /**
  * What a press took: the sprite, the height of the grab point above its foot
- * (`lift`, in board units), and the press point (`at`). The drag aims the
- * grab point dropped by that height, so the sprite does not jump to the
- * square behind it.
+ * (`lift`, in board units), and the press point on the sprite at rest
+ * (`world`, in board units). The drag aims the grab point dropped by that
+ * height, so the sprite does not jump to the square behind it. The home
+ * radius is centered on `world`, so it stays on the start square when the
+ * view turns, zooms, pans or resizes.
  */
 interface Grab {
   id: string;
   lift: number;
-  at: Point;
+  world: Vector3;
 }
 
 interface DragParts {
@@ -77,6 +86,7 @@ export class SpriteDrag {
   } | null = null;
   private settle: Settle | null = null;
   private readonly aim = new Ray();
+  private readonly centre = new Vector2();
 
   constructor(private readonly parts: DragParts) {}
 
@@ -94,7 +104,7 @@ export class SpriteDrag {
     return {
       id: hit.id,
       lift: hit.point.y - standPoint(board, from).y,
-      at: { x: at.x, y: at.y },
+      world: hit.point.clone(),
     };
   }
 
@@ -140,8 +150,9 @@ export class SpriteDrag {
   /**
    * Aims the drag from the pointer, each time it moves and on each frame.
    *
-   * - While the pointer is in `HOME_RADIUS` of the press point, it aims at the
-   *   start square, also where a taller column in front hides that square.
+   * - While the pointer is in `HOME_RADIUS` of the press point on the screen
+   *   (the grab point of the sprite at rest, projected on each call), it aims
+   *   at the start square, also where a taller column in front hides it.
    * - Out of that radius, it aims at the square under the grab point dropped
    *   by its lift: the first column top that the ray of the pointer, moved
    *   down by the lift (`aim`), comes down on. `aim` goes through the sides
@@ -155,8 +166,9 @@ export class SpriteDrag {
     if (!drag) return;
     const { board, view } = this.parts;
     const { pointer, grab, from } = drag;
+    const centre = view.screenPoint(grab.world, this.centre);
     const home =
-      Math.hypot(pointer.x - grab.at.x, pointer.y - grab.at.y) <=
+      Math.hypot(pointer.x - centre.x, pointer.y - centre.y) <=
       view.unitsToPixels(HOME_RADIUS);
     let square: Square | null = from;
     if (!home) {
