@@ -8,8 +8,7 @@ import {
   type Ray,
   type Vector3,
 } from "three";
-import type { Board, SpriteSpec } from "../shared/scene.js";
-import type { Square } from "./picking.js";
+import type { Board, SpriteSpec, Square } from "../shared/scene.js";
 import {
   addQuad,
   geometryFrom,

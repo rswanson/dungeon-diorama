@@ -25,6 +25,7 @@ import { exposeDiorama } from "./hook.js";
 import { showTurnButtons } from "./hud.js";
 import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
+import { PathLine } from "./pathline.js";
 import { attachPointer } from "./pointer.js";
 import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
@@ -98,6 +99,10 @@ function showBoard(file: SceneFile): void {
   const state = new BoardState(file.board, file.sprites);
   const highlight = new SquareHighlight(file.board);
   scene.add(highlight.mesh);
+  const path = new PathLine(file.board);
+  scene.add(path.mesh);
+  // The feet of the route of a drag, near the pointer.
+  const pathLabel = new BoardLabel({ className: "path-label" });
 
   scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
 
@@ -164,6 +169,8 @@ function showBoard(file: SceneFile): void {
     sprites,
     state,
     highlight,
+    path,
+    label: pathLabel,
     scene,
     requestDraw,
   });

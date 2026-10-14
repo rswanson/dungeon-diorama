@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
 import { expect, test as base, type Page } from "@playwright/test";
 import type { Diorama } from "../src/shared/diorama.js";
+import { findPath } from "../src/shared/path.js";
+import { parseScene } from "../src/shared/scene.js";
 import { CLICK_SLOP } from "../src/client/press.js";
 
 type Square = [number, number];
@@ -8,6 +11,11 @@ type Square = [number, number];
 const FIGHTER: Square = [7, 6];
 const FREE: Square = [5, 6];
 const GOBLIN: Square = [12, 4];
+/** The wizard's square, and a free square across the board on a diagonal from it, behind the fighter. */
+const WIZARD: Square = [3, 2];
+const ACROSS: Square = [8, 7];
+/** A free square on the diagonal between them. */
+const MIDWAY: Square = [5, 4];
 
 /** The nudge after the press: just past the click slop, so the press becomes a drag. */
 const NUDGE_PX = CLICK_SLOP + 2;
@@ -74,7 +82,8 @@ async function grab(
 ): Promise<{
   /** A few pixels from the press: past the click slop, near the grab point. */
   nudge(): Promise<void>;
-  moveTo(square: Square): Promise<void>;
+  /** Moves the mouse for the square and gives back where the pointer is. */
+  moveTo(square: Square): Promise<{ x: number; y: number }>;
 }> {
   const start = await hook(page, "spriteSquare", id);
   const body = await hook(page, "spriteScreen", id);
@@ -92,9 +101,9 @@ async function grab(
       const to = await hook(page, "squareScreen", ...square);
       if (!to)
         throw new Error(`Square [${square.join(", ")}] is off the board.`);
-      await page.mouse.move(to.x + body.x - foot.x, to.y + body.y - foot.y, {
-        steps: MOVE_STEPS,
-      });
+      const pointer = { x: to.x + body.x - foot.x, y: to.y + body.y - foot.y };
+      await page.mouse.move(pointer.x, pointer.y, { steps: MOVE_STEPS });
+      return pointer;
     },
   };
 }
@@ -131,6 +140,8 @@ test("a drop on the goblin's square puts the fighter back", async ({
   const held = await grab(page, "fighter");
   await held.moveTo(GOBLIN);
   expect(await hook(page, "dragTarget")).toEqual(GOBLIN);
+  // The drop on an occupied square does not move the fighter: no route shows.
+  expect(await hook(page, "dragPath")).toBeNull();
   // During the drag the sprite is lifted, so it stands on no square.
   expect(await hook(page, "spriteSquare", "fighter")).toBeNull();
   await page.mouse.up();
@@ -162,7 +173,82 @@ test("Esc during a drag puts the fighter back", async ({ page }) => {
   await expect
     .poll(() => hook(page, "spriteSquare", "fighter"))
     .toEqual(FIGHTER);
+  expect(await hook(page, "dragPath")).toBeNull();
+  await expect(page.locator(".path-label")).toBeHidden();
   // The release after the cancel moves nothing.
   await page.mouse.up();
   expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
+});
+
+test("a drag shows the route and its feet until the drop", async ({ page }) => {
+  // The route the demo scene file gives: around the other sprites.
+  const result = parseScene(
+    readFileSync(
+      new URL("../public/scenes/demo.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  if (!result.ok) throw new Error(result.problems.join("\n"));
+  const { board, sprites } = result.scene;
+  const others = new Set(
+    sprites.filter((s) => s.id !== "wizard").map((s) => s.at.join(",")),
+  );
+  /** The route the demo scene file gives from the wizard's square to `to`. */
+  const routeTo = (to: Square) => {
+    const route = findPath(
+      { ...board, blocked: (x, z) => others.has(`${x},${z}`) },
+      { x: WIZARD[0], z: WIZARD[1] },
+      { x: to[0], z: to[1] },
+    );
+    if (!route) throw new Error("The demo scene has no route to the square.");
+    return route;
+  };
+  const route = routeTo(ACROSS);
+
+  expect(await hook(page, "spriteSquare", "wizard")).toEqual(WIZARD);
+  const held = await grab(page, "wizard");
+  const label = page.locator(".path-label");
+  // On the way, on a free square between the two: the route is to that square.
+  const halfway = routeTo(MIDWAY);
+  const nearPointer = async (pointer: { x: number; y: number }) => {
+    const box = await label.boundingBox();
+    const viewport = page.viewportSize();
+    if (!box || !viewport) throw new Error("The route label has no box.");
+    // The label lies fully inside the window.
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    // Its nearest edge is within 60 px of the pointer, on each axis.
+    const gapX = Math.max(
+      box.x - pointer.x,
+      pointer.x - (box.x + box.width),
+      0,
+    );
+    const gapY = Math.max(
+      box.y - pointer.y,
+      pointer.y - (box.y + box.height),
+      0,
+    );
+    expect(gapX).toBeLessThanOrEqual(60);
+    expect(gapY).toBeLessThanOrEqual(60);
+  };
+
+  const pointerMidway = await held.moveTo(MIDWAY);
+  expect(await hook(page, "dragTarget")).toEqual(MIDWAY);
+  expect(await hook(page, "dragPath")).toEqual(halfway);
+  await expect(label).toHaveText(`${halfway.feet} ft`);
+  await nearPointer(pointerMidway);
+
+  const pointerAcross = await held.moveTo(ACROSS);
+  expect(await hook(page, "dragTarget")).toEqual(ACROSS);
+  // Each square from the wizard's square to the target, both in it.
+  expect(await hook(page, "dragPath")).toEqual(route);
+  await expect(label).toHaveText(`${route.feet} ft`);
+  await nearPointer(pointerAcross);
+
+  await page.mouse.up();
+  await expect.poll(() => hook(page, "spriteSquare", "wizard")).toEqual(ACROSS);
+  expect(await hook(page, "dragPath")).toBeNull();
+  await expect(label).toBeHidden();
 });

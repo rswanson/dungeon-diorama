@@ -52,6 +52,18 @@ describe("BoardState", () => {
     expect(board.squareOf("fighter")).toEqual({ x: 0, z: 0 });
   });
 
+  it("marks the squares of the other sprites only", () => {
+    const board = state();
+    const occupied = board.occupiedExcept("fighter");
+    expect(occupied).toHaveLength(SIZE.width * SIZE.depth);
+    // Only the goblin's square [2, 1]: not the fighter's own square.
+    expect([...occupied.keys()].filter((i) => occupied[i] === 1)).toEqual([
+      1 * SIZE.width + 2,
+    ]);
+    // An unknown id marks every sprite.
+    expect(board.occupiedExcept("nobody").reduce((a, b) => a + b)).toBe(2);
+  });
+
   it("does not move an unknown sprite", () => {
     expect(state().canMove("nobody", { x: 1, z: 1 })).toBe(false);
   });

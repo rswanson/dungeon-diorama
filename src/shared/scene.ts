@@ -26,6 +26,12 @@ export interface Board {
   tiles: string[];
 }
 
+/** A square of the board, by its column and its row. */
+export interface Square {
+  x: number;
+  z: number;
+}
+
 export interface SpriteSpec {
   id: string;
   name: string;

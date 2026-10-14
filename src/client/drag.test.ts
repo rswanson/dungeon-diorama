@@ -2,13 +2,26 @@ import { readFileSync } from "node:fs";
 import { Box3, Object3D, Vector3, type Ray } from "three";
 import { describe, expect, it } from "vitest";
 import { spritePixels } from "../../scripts/sprites.js";
-import { parseScene, type Board, type SpriteSpec } from "../shared/scene.js";
+import { isRoute } from "../shared/path.js";
+import {
+  parseScene,
+  type Board,
+  type Square,
+  type SpriteSpec,
+} from "../shared/scene.js";
 import { createBoardMesh, standPoint } from "./board.js";
 import { BoardState } from "./board-state.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
-import { HOME_RADIUS, LIFT, SETTLE_MS, SpriteDrag } from "./drag.js";
+import {
+  HOME_RADIUS,
+  LIFT,
+  SETTLE_MS,
+  SpriteDrag,
+  type RouteLabel,
+} from "./drag.js";
 import { SquareHighlight } from "./highlight.js";
-import { pickSquare, type Square } from "./picking.js";
+import { PathLine } from "./pathline.js";
+import { pickSquare } from "./picking.js";
 import type { Point } from "./point.js";
 import {
   MAX_HEIGHT,
@@ -31,6 +44,28 @@ function solid(width: number, height: number): SpriteVoxels {
   return { width, voxels: voxelsFromPixels(width, height, rgba) };
 }
 
+/** A route label that keeps each call of the drag. */
+class RecordingLabel implements RouteLabel {
+  /** Each call the drag made, in order: the text it showed, "move" or "hide". */
+  readonly calls: string[] = [];
+  /** The text the label shows now, or null when it is hidden. */
+  text: string | null = null;
+
+  showAt(text: string): void {
+    this.calls.push(text);
+    this.text = text;
+  }
+
+  moveTo(): void {
+    this.calls.push("move");
+  }
+
+  hide(): void {
+    this.calls.push("hide");
+    this.text = null;
+  }
+}
+
 /** The drag and all its parts on `board`, with the view at its start turn. */
 function stage(
   board: Board,
@@ -51,12 +86,16 @@ function stage(
   );
   const highlight = new SquareHighlight(board);
   const scene = new Object3D();
+  const path = new PathLine(board);
+  const label = new RecordingLabel();
   const drag = new SpriteDrag({
     board,
     view,
     sprites: layer,
     state,
     highlight,
+    path,
+    label,
     scene,
     requestDraw: () => {},
   });
@@ -67,6 +106,8 @@ function stage(
     state,
     highlight,
     scene,
+    path,
+    label,
     drag,
     /** The point on the screen of a point of the board. */
     screen(p: Vector3): Point {
@@ -366,6 +407,130 @@ describe("SpriteDrag", () => {
     expect(drag.target()).toEqual(FREE);
     drag.frame(0, view.azimuth);
     expect(drag.target()).toEqual(now);
+  });
+});
+
+// Four squares by four, flat. The hero is on [3, 3]. The corner [0, 0] is free,
+// and the rat, the bat and the imp on [1, 0], [0, 1] and [1, 1] close it in.
+const FLAT: Board = {
+  width: 4,
+  depth: 4,
+  materials: { s: { name: "stone", top: "#888888", side: "#666666" } },
+  heights: ["0000", "0000", "0000", "0000"],
+  tiles: ["ssss", "ssss", "ssss", "ssss"],
+};
+const CORNER: Square = { x: 0, z: 0 };
+
+describe("SpriteDrag route", () => {
+  /** The stage on `FLAT` and a press on the middle of the hero. */
+  function pressHero() {
+    const parts = stage(FLAT, [
+      { spec: spec("hero", { x: 3, z: 3 }), voxels: solid(16, 32) },
+      { spec: spec("rat", { x: 1, z: 0 }), voxels: solid(16, 8) },
+      { spec: spec("bat", { x: 0, z: 1 }), voxels: solid(16, 8) },
+      { spec: spec("imp", { x: 1, z: 1 }), voxels: solid(16, 8) },
+    ]);
+    const foot = standPoint(FLAT, { x: 3, z: 3 });
+    const at = parts.screen(foot.clone().setY(foot.y + 1));
+    const grab = parts.drag.grab(at);
+    if (grab?.id !== "hero") throw new Error("The press missed the hero.");
+    return {
+      ...parts,
+      at,
+      grab,
+      /** The pointer for which the hero aims at the center of `square`. */
+      over(square: Square): Point {
+        const to = parts.screen(standPoint(FLAT, square));
+        const from = parts.screen(foot);
+        return { x: to.x + at.x - from.x, y: to.y + at.y - from.y };
+      },
+    };
+  }
+
+  it("shows the route to a free square and its feet, and takes them away at the end", () => {
+    const { drag, path, label, grab, at, over } = pressHero();
+    drag.start(grab, at);
+    // At the start square, the path line and the label show nothing.
+    expect(drag.route()).toBeNull();
+    expect(path.mesh.visible).toBe(false);
+    expect(label.text).toBeNull();
+    const target = over({ x: 3, z: 0 });
+    drag.move(target);
+    expect(drag.route()).toEqual({
+      squares: [
+        { x: 3, z: 3 },
+        { x: 3, z: 2 },
+        { x: 3, z: 1 },
+        { x: 3, z: 0 },
+      ],
+      feet: 15,
+    });
+    expect(path.mesh.visible).toBe(true);
+    expect(label.text).toBe("15 ft");
+
+    // A move that keeps the target only moves the label.
+    const calls = label.calls.length;
+    const geometry = path.mesh.geometry;
+    drag.move({ x: target.x + 1, y: target.y });
+    expect(label.calls.slice(calls)).toEqual(["move"]);
+    expect(path.mesh.geometry).toBe(geometry);
+
+    // Off the board and back: the same route keeps its geometry.
+    drag.move({ x: -W, y: -H });
+    expect(path.mesh.visible).toBe(false);
+    expect(label.text).toBeNull();
+    drag.move(target);
+    expect(path.mesh.visible).toBe(true);
+    expect(path.mesh.geometry).toBe(geometry);
+
+    drag.cancel();
+    expect(path.mesh.visible).toBe(false);
+    expect(label.text).toBeNull();
+    expect(drag.route()).toBeNull();
+  });
+
+  it("shows no path to a free square that sprites close in, and a drop there still moves the sprite", () => {
+    const { drag, state, layer, path, label, highlight, grab, at, over, rest } =
+      pressHero();
+    drag.start(grab, at);
+    drag.move(over(CORNER));
+    expect(drag.target()).toEqual(CORNER);
+    expect(state.canMove("hero", CORNER)).toBe(true);
+    expect(drag.route()).toBe("none");
+    expect(path.mesh.visible).toBe(false);
+    expect(label.text).toBe("No path");
+    // The square glows free, and the hero stands over it.
+    expect(highlight.mesh.visible).toBe(true);
+    drag.drop(over(CORNER));
+    expect(label.text).toBeNull();
+    expect(state.squareOf("hero")).toEqual(CORNER);
+    rest();
+    expect(layer.get("hero")?.mesh.position).toEqual(standPoint(FLAT, CORNER));
+  });
+
+  it("works out the route again for the new target after a turn moves the target", () => {
+    const { drag, view, label, grab, at, over, turn, aim } = pressHero();
+    drag.start(grab, at);
+    const pointer = over({ x: 2, z: 3 });
+    drag.move(pointer);
+    const before = drag.route();
+    expect(before).toMatchObject({ feet: 5 });
+    turn();
+    // The board turned under the pointer, which did not move.
+    const now = pickSquare(FLAT, aim(pointer, grab.lift), { tops: true });
+    expect(now).not.toBeNull();
+    expect(now).not.toEqual({ x: 2, z: 3 });
+    expect(now).not.toEqual({ x: 3, z: 3 });
+    const calls = label.calls.length;
+    drag.frame(0, view.azimuth);
+    expect(drag.target()).toEqual(now);
+    const route = drag.route();
+    if (!isRoute(route)) throw new Error("No route for the target.");
+    expect(route).not.toEqual(before);
+    expect(route.squares[0]).toEqual({ x: 3, z: 3 });
+    expect(route.squares.at(-1)).toEqual(now);
+    // The frame worked out the route once, and the label shows its feet.
+    expect(label.calls.slice(calls)).toEqual([`${route.feet} ft`]);
   });
 });
 

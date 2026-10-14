@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { Box3, Mesh, Ray, Raycaster, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import type { Board } from "../shared/scene.js";
+import type { Board, Square } from "../shared/scene.js";
 import { columnTop, createBoardMesh } from "./board.js";
 import { BoardCamera, TURN_MS } from "./camera.js";
-import { pickSquare, type Square } from "./picking.js";
+import { pickSquare } from "./picking.js";
 
 // A high column (9) beside low ones, so the high column hides some of them.
 const BOARD: Board = {

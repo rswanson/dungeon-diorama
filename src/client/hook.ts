@@ -51,5 +51,8 @@ export function exposeDiorama(parts: {
       const square = drag.target();
       return square ? [square.x, square.z] : null;
     },
+    dragPath() {
+      return drag.route();
+    },
   });
 }

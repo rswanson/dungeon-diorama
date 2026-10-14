@@ -6,13 +6,21 @@ import {
   Vector3,
   type Object3D,
 } from "three";
-import type { Board } from "../shared/scene.js";
+import {
+  dragRoute,
+  isRoute,
+  routeLabel,
+  type DragRoute,
+  type Grid,
+} from "../shared/path.js";
+import type { Board, Square } from "../shared/scene.js";
 import { standPoint } from "./board.js";
 import type { BoardState } from "./board-state.js";
 import { easeOut, type BoardCamera } from "./camera.js";
 import type { SquareHighlight } from "./highlight.js";
+import type { PathLine } from "./pathline.js";
 import type { Point } from "./point.js";
-import { pickSquare, type Square } from "./picking.js";
+import { pickSquare } from "./picking.js";
 import type { SpriteLayer } from "./sprites.js";
 
 /** The height of a dragged sprite above the column top under it, in board units, or above the sprite on it. */
@@ -48,12 +56,23 @@ interface Grab {
   world: Vector3;
 }
 
+/** The label near the pointer that gives the feet of the route. `BoardLabel` is one. */
+export interface RouteLabel {
+  /** Shows `text` near the canvas point `at`. */
+  showAt(text: string, at: Point): void;
+  /** Moves the label near the canvas point `at`. */
+  moveTo(at: Point): void;
+  hide(): void;
+}
+
 interface DragParts {
   board: Board;
   view: BoardCamera;
   sprites: SpriteLayer;
   state: BoardState;
   highlight: SquareHighlight;
+  path: PathLine;
+  label: RouteLabel;
   /** The ghost goes in here. */
   scene: Object3D;
   requestDraw(): void;
@@ -70,7 +89,8 @@ interface Settle {
 
 /**
  * The drag of a sprite: it lifts and follows the pointer from square to
- * square, a ghost stays on the start square, and the target square glows. The
+ * square, a ghost stays on the start square, the target square glows, and a
+ * line shows the route to it with its length in feet. The
  * drop puts the sprite on a free square or back on its start square. Moves are
  * not saved yet.
  */
@@ -83,6 +103,10 @@ export class SpriteDrag {
     /** The last point of the pointer, so a turn or a zoom can aim again. */
     pointer: Point;
     target: Square | null;
+    /** The squares the route goes around: the squares of the other sprites. */
+    grid: Grid;
+    /** The route to the target, which the path line shows. */
+    route: DragRoute;
   } | null = null;
   private settle: Settle | null = null;
   private readonly aim = new Ray();
@@ -113,6 +137,11 @@ export class SpriteDrag {
     return this.drag?.target ? { ...this.drag.target } : null;
   }
 
+  /** What the path line shows now: a route, "none", or null when no drag runs or it shows nothing. */
+  route(): DragRoute {
+    return this.drag?.route ?? null;
+  }
+
   /** True while a drag runs or a sprite still moves onto its square. */
   busy(): boolean {
     return this.drag !== null || this.settle !== null;
@@ -135,6 +164,8 @@ export class SpriteDrag {
       grab,
       pointer: at,
       target: from,
+      grid: this.grid(grab.id),
+      route: null,
     };
     this.show(from);
     this.retarget();
@@ -145,6 +176,7 @@ export class SpriteDrag {
     if (!this.drag) return;
     this.drag.pointer = at;
     this.retarget();
+    this.parts.label.moveTo(at);
   }
 
   /**
@@ -227,12 +259,25 @@ export class SpriteDrag {
    * Shows the target `square`: it glows, green when it is free and red when
    * another sprite holds it, and the dragged sprite goes above its center,
    * also above the sprite on it. Off the board (null), the glow goes and the
-   * sprite stays at its last square.
+   * sprite stays at its last square. The path line shows the route to it
+   * (`dragRoute`), and the label near the pointer its feet or "No path".
    */
   private show(square: Square | null): void {
     const drag = this.drag;
     if (!drag) return;
-    const { board, sprites, state, highlight } = this.parts;
+    const { board, sprites, state, highlight, path, label } = this.parts;
+    drag.route = dragRoute(drag.grid, drag.from, square);
+    if (isRoute(drag.route)) {
+      path.show(drag.route.squares);
+    } else {
+      path.hide();
+    }
+    const text = routeLabel(drag.route);
+    if (text === null) {
+      label.hide();
+    } else {
+      label.showAt(text, drag.pointer);
+    }
     if (!square) {
       highlight.hide();
       return;
@@ -259,13 +304,25 @@ export class SpriteDrag {
     this.settleOn(id, sprite.mesh, dest);
   }
 
-  /** Takes away the ghost and the glow. The sprite stays where it is. */
+  /** Takes away the ghost, the glow, the path line and its label. The sprite stays where it is. */
   private end(): void {
     const drag = this.drag;
     if (!drag) return;
     this.parts.scene.remove(drag.ghost);
     this.parts.highlight.hide();
+    this.parts.path.hide();
+    this.parts.label.hide();
     this.drag = null;
+  }
+
+  /**
+   * The board for the route of sprite `id`: the squares of the other sprites
+   * are blocked. No sprite moves during a drag, so it is made once at the start.
+   */
+  private grid(id: string): Grid {
+    const { width, depth } = this.parts.board;
+    const blocked = this.parts.state.occupiedExcept(id);
+    return { width, depth, blocked: (x, z) => blocked[z * width + x] === 1 };
   }
 
   /** Starts the move of sprite `id` onto `square`. A move that still runs ends at once. */

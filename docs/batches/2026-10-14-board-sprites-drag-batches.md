@@ -62,7 +62,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B5: Drag-move
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** The player drags a sprite to a free square and it snaps there; a drop on an occupied square or off the board puts it back. Moves are not saved yet; a reload shows the scene file layout.
 - **Acceptance criteria:**
   1. A press on a sprite and a move of more than 4 px starts a drag (mouse, pen and touch through pointer events).
@@ -77,7 +77,7 @@ Each batch merges to `main` with CI green. From B1 on, Claude then deploys `main
 
 ## B6: Path line and distance
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** While dragging, a line shows the shortest route from the start square to the target, around occupied squares, with its length in feet by the 3.5e diagonal rule, or "No path".
 - **Acceptance criteria:**
   1. Path finding (shared module, unit tested) returns the shortest route on the grid, around occupied squares; a diagonal step can pass between two occupied squares; height does not block or cost.
