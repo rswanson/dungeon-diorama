@@ -391,7 +391,9 @@ test("the board fits left of the open sidebar, and keeps its zoom and center whe
   const open = { x: 0, y: 0, width: 1280 - 320, height: 720, drawn: 960 };
   await expect.poll(() => boardArea(page)).toEqual(open);
   expect(await page.locator(".dice").boundingBox()).toMatchObject({ x: 960 });
-  // At the least zoom, the whole board shows in the board area.
+  // At the least zoom, the centers of the four corner squares show in the board
+  // area. The demo board is 16 squares wide and 12 deep: the hook gives no board
+  // size, and it gives only the centers of squares, not their corners.
   for (const [x, z] of [
     [0, 0],
     [15, 0],

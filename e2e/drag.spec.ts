@@ -334,3 +334,30 @@ test("a drag shows the route and its feet until the drop", async ({ page }) => {
   expect(await hook(page, "dragPath")).toBeNull();
   await expect(label).toBeHidden();
 });
+
+test("the route label stays inside the board area near its right edge", async ({
+  page,
+}) => {
+  // Zoom in at the left, so a free square lies near the right edge of the
+  // board area, which the open sidebar bounds.
+  const near: Square = [11, 6];
+  const before = (await hook(page, "squareScreen", ...near))!;
+  await page.mouse.move(100, 360);
+  await page.mouse.wheel(0, -300);
+  await expect
+    .poll(() => hook(page, "squareScreen", ...near))
+    .not.toEqual(before);
+  const held = await grab(page, "wizard");
+  const pointer = await held.moveTo(near);
+  expect(await hook(page, "dragTarget")).toEqual(near);
+  const area = await boardArea(page);
+  // The pointer is too near the right edge for a label to its right.
+  expect(pointer.x).toBeLessThan(area.width);
+  expect(pointer.x).toBeGreaterThan(area.width - 100);
+  const label = page.locator(".path-label");
+  await expect(label).toBeVisible();
+  const box = await label.boundingBox();
+  if (!box) throw new Error("The route label has no box.");
+  expect(box.x + box.width).toBeLessThanOrEqual(area.x + area.width);
+  await page.mouse.up();
+});
