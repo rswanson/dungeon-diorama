@@ -34,7 +34,6 @@ export function showDiceSidebar(scene: string): void {
   // A later resize does not open or close it.
   setOpen(window.matchMedia(OPEN_AT_START).matches);
 
-  let sending = false;
   const send = async (): Promise<void> => {
     const text = input.value;
     const parsed = parseInput(text);
@@ -43,7 +42,6 @@ export function showDiceSidebar(scene: string): void {
       errorLine.textContent = parsed.error;
       return;
     }
-    sending = true;
     // The text cannot change while it sends, so a 201 clears what was sent.
     input.readOnly = true;
     errorLine.textContent = "";
@@ -57,7 +55,6 @@ export function showDiceSidebar(scene: string): void {
       log.scrollTop = log.scrollHeight;
       input.value = "";
     } finally {
-      sending = false;
       input.readOnly = false;
     }
   };
@@ -66,7 +63,7 @@ export function showDiceSidebar(scene: string): void {
     if (e.key !== "Enter" || e.isComposing) return;
     e.preventDefault();
     // During a send, a second Enter does nothing.
-    if (!sending) void send();
+    if (!input.readOnly) void send();
   });
 
   sidebar.hidden = false;
@@ -98,8 +95,13 @@ function entryItem(entry: Entry): HTMLLIElement {
 
 function segmentNode({ text, style }: LineSegment): Node {
   if (!style) return document.createTextNode(text);
-  const node = document.createElement(style === "total" ? "strong" : "span");
-  if (style !== "total") node.className = `die-${style}`;
+  let node: HTMLElement;
+  if (style === "total") {
+    node = document.createElement("strong");
+  } else {
+    node = document.createElement("span");
+    node.className = `die-${style}`;
+  }
   node.textContent = text;
   return node;
 }

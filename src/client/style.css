@@ -274,14 +274,17 @@ body {
   font-weight: 400;
 }
 
+.die-max,
+.die-min {
+  font-weight: 600;
+}
+
 .die-max {
   color: var(--die-max);
-  font-weight: 600;
 }
 
 .die-min {
   color: var(--die-min);
-  font-weight: 600;
 }
 
 .dice-error {

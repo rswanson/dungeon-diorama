@@ -1,4 +1,4 @@
-import type { Roll } from "../shared/dice.js";
+import { formatModifier, type Roll } from "../shared/dice.js";
 
 /**
  * A piece of the result line of a roll. `max` is a die that shows its highest
@@ -20,11 +20,8 @@ export function rollLine(roll: Roll): LineSegment[] {
     const style = die === roll.sides ? "max" : die === 1 ? "min" : undefined;
     line.push(style ? { text: String(die), style } : { text: String(die) });
   });
-  const { modifier } = roll;
-  const sign =
-    modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${-modifier}` : "";
   line.push(
-    { text: `)${sign} = ` },
+    { text: `)${formatModifier(roll.modifier, " ")} = ` },
     { text: String(roll.total), style: "total" },
   );
   return line;

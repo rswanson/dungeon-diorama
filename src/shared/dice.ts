@@ -57,9 +57,22 @@ export function parseTerm(text: string): DiceTerm | null {
   if (sides < MIN_SIDES || sides > MAX_SIDES) return null;
   if (size > MAX_MODIFIER) return null;
   const modifier = size === 0 ? 0 : match[3] === "-" ? -size : size;
-  const sign =
-    modifier > 0 ? `+${modifier}` : modifier < 0 ? `${modifier}` : "";
-  return { dice: `${count}d${sides}${sign}`, count, sides, modifier };
+  return {
+    dice: `${count}d${sides}${formatModifier(modifier)}`,
+    count,
+    sides,
+    modifier,
+  };
+}
+
+/**
+ * A modifier as text: "" for 0, else its sign and its size, for example `+1`
+ * or `-2`. `gap` goes on each side of the sign, so a gap of " " gives
+ * ` + 1` and ` - 2`.
+ */
+export function formatModifier(modifier: number, gap = ""): string {
+  if (modifier === 0) return "";
+  return `${gap}${modifier > 0 ? "+" : "-"}${gap}${Math.abs(modifier)}`;
 }
 
 /**
