@@ -1,6 +1,6 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import { parseTerm, rollTerm } from "../src/shared/dice.js";
-import { hook, ready, test } from "./fixtures.js";
+import { boardArea, hook, ready, test } from "./fixtures.js";
 
 const ROLLS = "**/api/scenes/*/rolls";
 
@@ -382,6 +382,68 @@ test("the Dice button opens and closes the sidebar, which does not cover the tur
   const sidebarBox = await page.locator(".dice").boundingBox();
   expect(noticeBox!.x).toBeGreaterThanOrEqual(0);
   expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(sidebarBox!.x);
+});
+
+test("the board fits left of the open sidebar, and keeps its zoom and center when the sidebar closes", async ({
+  page,
+}) => {
+  const { toggle } = sidebar(page);
+  const open = { x: 0, y: 0, width: 1280 - 320, height: 720, drawn: 960 };
+  await expect.poll(() => boardArea(page)).toEqual(open);
+  expect(await page.locator(".dice").boundingBox()).toMatchObject({ x: 960 });
+  // At the least zoom, the whole board shows in the board area.
+  for (const [x, z] of [
+    [0, 0],
+    [15, 0],
+    [0, 11],
+    [15, 11],
+  ]) {
+    const at = (await hook(page, "squareScreen", x, z))!;
+    expect(at.x).toBeGreaterThan(0);
+    expect(at.x).toBeLessThan(open.width);
+    expect(at.y).toBeGreaterThan(0);
+    expect(at.y).toBeLessThan(open.height);
+  }
+
+  // Zoom in, then close and open the sidebar.
+  const corners = async () => [
+    (await hook(page, "squareScreen", 0, 0))!,
+    (await hook(page, "squareScreen", 15, 11))!,
+  ];
+  const start = await corners();
+  await page.mouse.move(300, 300);
+  await page.mouse.wheel(0, -200);
+  await expect.poll(corners).not.toEqual(start);
+  const zoomed = await corners();
+  /** The corners are where `zoomed` puts them, `dx` px to the right. */
+  const expectCorners = async (dx: number) => {
+    const now = await corners();
+    now.forEach((at, i) => {
+      expect(at.x).toBeCloseTo(zoomed[i].x + dx, 3);
+      expect(at.y).toBeCloseTo(zoomed[i].y, 3);
+    });
+  };
+  await toggle.click();
+  await expect
+    .poll(() => boardArea(page))
+    .toEqual({ ...open, width: 1280, drawn: 1280 });
+  // The center moves 160px to the right, and the zoom stays the same.
+  await expectCorners(160);
+  await toggle.click();
+  await expect.poll(() => boardArea(page)).toEqual(open);
+  await expectCorners(0);
+
+  // A window resize keeps the board left of the open sidebar.
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await expect
+    .poll(() => boardArea(page))
+    .toEqual({ x: 0, y: 0, width: 680, height: 700, drawn: 680 });
+  // On a window narrower than 456px, the board keeps the full window.
+  await page.setViewportSize({ width: 400, height: 700 });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect
+    .poll(() => boardArea(page))
+    .toEqual({ x: 0, y: 0, width: 400, height: 700, drawn: 400 });
 });
 
 test("a press on the sidebar does not pan, and Q, E and Esc in the input are text", async ({

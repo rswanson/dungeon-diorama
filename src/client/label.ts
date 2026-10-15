@@ -5,17 +5,19 @@ import type { Point } from "./point.js";
 /** The space between the pointer and a label at the pointer, in CSS pixels, so a finger does not hide it. */
 const POINTER_GAP = 24;
 
-/** `value` in the range 0 to `max`, or 0 when `max` is below 0 (the window is smaller than the label). */
+/** `value` in the range 0 to `max`, or 0 when `max` is below 0 (the area is smaller than the label). */
 function clamp(value: number, max: number): number {
   return Math.max(0, Math.min(value, max));
 }
 
 /**
  * A small parchment label. It stands above an object on the board (`show`),
- * or near the pointer (`showAt`).
+ * or near the pointer (`showAt`). A label near the pointer stays in `area`,
+ * which starts at the top left of the window (the canvas, or the window).
  */
 export class BoardLabel {
   private readonly element: HTMLElement;
+  private readonly area: Element;
   private text: string | null = null;
   /** The size of the label with its text, in CSS pixels, or null until it is measured. */
   private size: { width: number; height: number } | null = null;
@@ -27,7 +29,9 @@ export class BoardLabel {
   constructor({
     className,
     parent = document.body,
-  }: { className?: string; parent?: HTMLElement } = {}) {
+    area = document.documentElement,
+  }: { className?: string; parent?: HTMLElement; area?: Element } = {}) {
+    this.area = area;
     this.element = document.createElement("div");
     this.element.className = className
       ? `board-label ${className}`
@@ -58,7 +62,7 @@ export class BoardLabel {
 
   /**
    * Puts a label from `showAt` above and to the right of the canvas point
-   * `at`, or to the left of it or below it where the window has no room.
+   * `at`, or to the left of it or below it where the area has no room.
    */
   moveTo(at: Point): void {
     if (this.element.hidden || this.target) return;
@@ -68,16 +72,17 @@ export class BoardLabel {
       height: this.element.offsetHeight,
     };
     const { width, height } = this.size;
-    const right = at.x + POINTER_GAP + width <= window.innerWidth;
+    const { clientWidth, clientHeight } = this.area;
+    const right = at.x + POINTER_GAP + width <= clientWidth;
     const above = at.y - POINTER_GAP - height >= 0;
-    // Then keeps the whole label in the window on all four sides.
+    // Then keeps the whole label in the area on all four sides.
     const x = clamp(
       right ? at.x + POINTER_GAP : at.x - POINTER_GAP - width,
-      window.innerWidth - width,
+      clientWidth - width,
     );
     const y = clamp(
       above ? at.y - POINTER_GAP - height : at.y + POINTER_GAP,
-      window.innerHeight - height,
+      clientHeight - height,
     );
     this.element.style.transform = `translate(${x}px, ${y}px)`;
   }

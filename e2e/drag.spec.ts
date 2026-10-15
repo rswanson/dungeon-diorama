@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { findPath } from "../src/shared/path.js";
 import { parseScene, squareKey, type Scene } from "../src/shared/scene.js";
 import { CLICK_SLOP } from "../src/client/press.js";
-import { hook, ready, test } from "./fixtures.js";
+import { boardArea, hook, ready, test } from "./fixtures.js";
 
 type Square = [number, number];
 
@@ -74,12 +74,17 @@ async function grab(
   };
 }
 
+/** The Dice button, which opens and closes the dice sidebar. */
+const diceToggle = (page: Page) => page.getByRole("button", { name: "Dice" });
+
 // Each test has a browser context of its own, so it is a new visitor with no
-// saved moves: the fighter stands on its square of the scene file.
+// saved moves: the fighter stands on its square of the scene file. The window
+// is 1280px wide, so the dice sidebar is open at the start.
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await ready(page);
   expect(await hook(page, "spriteSquare", "fighter")).toEqual(FIGHTER);
+  await expect(diceToggle(page)).toHaveAttribute("aria-expanded", "true");
 });
 
 test("a drag puts the fighter on a free square, and it stays after a reload", async ({
@@ -115,6 +120,49 @@ test("a drag puts the fighter on a free square, and it stays after a reload", as
   } finally {
     await other.close();
   }
+});
+
+test("with the sidebar closed, a drag puts the fighter on a free square", async ({
+  page,
+}) => {
+  await diceToggle(page).click();
+  // The board fills the window again.
+  await expect.poll(async () => (await boardArea(page)).drawn).toBe(1280);
+  const held = await grab(page, "fighter");
+  await held.moveTo(FREE);
+  expect(await hook(page, "dragTarget")).toEqual(FREE);
+  await page.mouse.up();
+  await expect.poll(() => hook(page, "spriteSquare", "fighter")).toEqual(FREE);
+});
+
+test("a right-drag pan and a wheel zoom keep the square under the pointer", async ({
+  page,
+}) => {
+  const square = async () => (await hook(page, "squareScreen", ...FREE))!;
+  const start = await square();
+  // Whole pixels, so the pointer events have the same point.
+  const from = { x: Math.round(start.x), y: Math.round(start.y) };
+  const to = { x: from.x - 60, y: from.y + 40 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(to.x, to.y, { steps: 5 });
+  await page.mouse.up({ button: "right" });
+  const panned = await square();
+  expect(panned.x).toBeCloseTo(start.x + to.x - from.x, 3);
+  expect(panned.y).toBeCloseTo(start.y + to.y - from.y, 3);
+
+  // The zoom keeps the board point under the pointer at the pointer.
+  const at = { x: Math.round(panned.x), y: Math.round(panned.y) };
+  await page.mouse.move(at.x, at.y);
+  const near = (await hook(page, "squareScreen", FREE[0] + 2, FREE[1]))!;
+  await page.mouse.wheel(0, -200);
+  await expect
+    .poll(() => hook(page, "squareScreen", FREE[0] + 2, FREE[1]))
+    .not.toEqual(near);
+  // The square was less than 0.5px from the pointer, so the zoom moves it less than 1px.
+  const zoomed = await square();
+  expect(Math.abs(zoomed.x - at.x)).toBeLessThan(1);
+  expect(Math.abs(zoomed.y - at.y)).toBeLessThan(1);
 });
 
 test("a move that does not save puts the fighter back with a notice", async ({
@@ -246,13 +294,13 @@ test("a drag shows the route and its feet until the drop", async ({ page }) => {
   const halfway = routeTo(MIDWAY);
   const nearPointer = async (pointer: { x: number; y: number }) => {
     const box = await label.boundingBox();
-    const viewport = page.viewportSize();
-    if (!box || !viewport) throw new Error("The route label has no box.");
-    // The label lies fully inside the window.
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.y).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    if (!box) throw new Error("The route label has no box.");
+    const area = await boardArea(page);
+    // The label lies fully inside the board area, left of the open sidebar.
+    expect(box.x).toBeGreaterThanOrEqual(area.x);
+    expect(box.y).toBeGreaterThanOrEqual(area.y);
+    expect(box.x + box.width).toBeLessThanOrEqual(area.x + area.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(area.y + area.height);
     // Its nearest edge is within 60 px of the pointer, on each axis.
     const gapX = Math.max(
       box.x - pointer.x,

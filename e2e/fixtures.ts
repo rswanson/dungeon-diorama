@@ -56,3 +56,19 @@ export async function ready(page: Page): Promise<void> {
     })
     .toBe(true);
 }
+
+/**
+ * The box of the board's canvas on the page, and the width in CSS pixels of
+ * the view that the page drew last. Each changes when the board area changes.
+ */
+export function boardArea(page: Page) {
+  return page.locator("#scene").evaluate((canvas) => {
+    const { x, y, width, height } = canvas.getBoundingClientRect();
+    // The renderer sets the width attribute: the drawn width times the pixel ratio.
+    const { devicePixelRatio } = globalThis as unknown as {
+      devicePixelRatio: number;
+    };
+    const drawn = Number(canvas.getAttribute("width")) / devicePixelRatio;
+    return { x, y, width, height, drawn };
+  });
+}

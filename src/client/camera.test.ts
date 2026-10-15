@@ -121,6 +121,35 @@ describe("BoardCamera", () => {
     expect(v.unitsToPixels(1)).toBeCloseTo(2 * before, 6);
   });
 
+  it("fits the whole board at the least zoom, and keeps the target and the zoom when the view narrows", () => {
+    // The dice sidebar opens: the board area loses 320px on the right.
+    const narrow = W - 320;
+    const v = view();
+    v.resize(narrow, H);
+    expect(v.camera.zoom).toBe(MIN_ZOOM);
+    for (const x of [BOX.min.x, BOX.max.x]) {
+      for (const y of [BOX.min.y, BOX.max.y]) {
+        for (const z of [BOX.min.z, BOX.max.z]) {
+          const at = v.screenPoint(new Vector3(x, y, z));
+          expect(at.x).toBeGreaterThanOrEqual(0);
+          expect(at.x).toBeLessThanOrEqual(narrow);
+          expect(at.y).toBeGreaterThanOrEqual(0);
+          expect(at.y).toBeLessThanOrEqual(H);
+        }
+      }
+    }
+
+    v.zoomAt(2, 500, 200);
+    const target = v.target.clone();
+    // The sidebar closes, then opens again.
+    for (const width of [W, narrow]) {
+      v.resize(width, H);
+      expect(v.camera.zoom).toBe(2);
+      expect(v.target).toEqual(target);
+      expect(v.screenPoint(target).x).toBeCloseTo(width / 2, 6);
+    }
+  });
+
   it("keeps the board point under the pointer still when it zooms", () => {
     const v = view();
     const point = v.ray(600, 200).at(100, new Vector3());

@@ -118,7 +118,7 @@ function showBoard(
   const path = new PathLine(file.board);
   scene.add(path.mesh);
   // The feet of the route of a drag, near the pointer.
-  const pathLabel = new BoardLabel({ className: "path-label" });
+  const pathLabel = new BoardLabel({ className: "path-label", area: canvas });
 
   scene.add(new HemisphereLight("#f2e6cf", "#3b3128", 1.1));
 
@@ -145,8 +145,10 @@ function showBoard(
 
   let size = "";
   function draw(): void {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    // The canvas is the board area: the window, or the part left of the open
+    // dice sidebar (style.css).
+    const width = renderer.domElement.clientWidth;
+    const height = renderer.domElement.clientHeight;
     // Browser zoom or a move to another display changes the ratio.
     const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
     const key = `${width}x${height}@${ratio}`;
@@ -198,6 +200,9 @@ function showBoard(
     },
   });
 
+  // A window resize and an open or a close of the dice sidebar change the
+  // size of the canvas. A window resize can also change the pixel ratio.
+  new ResizeObserver(requestDraw).observe(canvas);
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);

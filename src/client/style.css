@@ -200,6 +200,17 @@ body {
   box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
 }
 
+/*
+ * On a window 456px or wider, the board fills the space left of the open
+ * sidebar. On a narrower window, the board keeps the full window, and the
+ * sidebar covers it.
+ */
+@media (min-width: 456px) {
+  .dice-open #scene {
+    width: calc(100% - var(--dice-width));
+  }
+}
+
 /* The turn buttons stay left of the open sidebar. */
 .dice-open .hud {
   right: calc(var(--dice-width) + max(16px, env(safe-area-inset-right)));
