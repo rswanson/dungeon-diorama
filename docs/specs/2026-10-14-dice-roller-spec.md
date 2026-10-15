@@ -52,7 +52,7 @@ The user is the same person as in the board spec: a person who runs a tabletop R
 
 A dice term is `NdS`, with an optional modifier `+M` or `-M`.
 
-- `N` is the number of dice: a whole number from 1 to 100. It is required: `d20` is an error.
+- `N` is the number of dice: a whole number from 1 to 100. It is optional: `d20` is the same as `1d20`.
 - `S` is the number of sides: a whole number from 2 to 100.
 - `M` is a whole number from 0 to 1000. With its sign, the modifier is from -1000 to 1000. No modifier is the same as `+0`.
 - The `d` can be `d` or `D`. Spaces between the parts are allowed: `2d6 + 1` is the same as `2d6+1`. A space inside a number (`1 0d6`) is an error.
@@ -101,7 +101,7 @@ The API gives each entry as JSON:
 - `kind` is `roll` (from `/roll`) or `note` (any other text).
 - A `roll` entry has exactly one part: a `roll` part.
 - A `note` entry has its parts in the order of the text. A note with no `[[...]]` has one `text` part.
-- `dice` is the normal form of the term: lower-case `d`, no spaces, no `+0`. For example `2D6 + 0` gives `2d6`.
+- `dice` is the normal form of the term: lower-case `d`, the count always written, no spaces, no `+0`. For example `2D6 + 0` gives `2d6`, and `d20` gives `1d20`.
 - `at` is the server time of the roll, in ISO 8601 UTC.
 - `id` is a whole number. A newer entry of a visitor has a higher `id`.
 
@@ -182,7 +182,7 @@ CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)
 ### Unit tests (Vitest)
 
 - `parseInput`: each row of the input table, with its error message.
-- The dice term limits: `1d2`, `100d100`, `+1000` and `-1000` are valid. `0d6`, `101d6`, `1d1`, `1d101`, `+1001` and `d20` are errors.
+- The dice term limits: `1d2`, `d20`, `100d100`, `+1000` and `-1000` are valid. `0d6`, `101d6`, `1d1`, `1d101` and `+1001` are errors.
 - The normal form of `dice` (case, spaces, `+0`).
 - The roll: with a fixed random source, the results and the total are correct, and each die is from 1 to `S`.
 - The log entry text: the result line, the modifier sign, and which dice are green and red.
@@ -213,9 +213,7 @@ CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)
 
 ## Assumption ledger
 
-| # | Question | Proposed default | Status |
-|---|----------|------------------|--------|
-| 1 | Is the count required, or is `d20` the same as `1d20`? | Required: `d20` is an error. | OPEN |
+(No open entries.)
 
 ## Decision log
 
@@ -245,3 +243,4 @@ CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)
 | D22 | Sidebar open state | Not remembered; window-width rule at each load | User (confirmed default) |
 | D23 | Rate limit | None | User (confirmed default) |
 | D24 | Tests | Parser unit tests, API tests, one Playwright test | User (confirmed default) |
+| D25 | Is the count required, or is `d20` the same as `1d20`? (ledger 1) | Optional: `d20` is the same as `1d20` | User (changed the default) |
