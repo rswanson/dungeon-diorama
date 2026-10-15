@@ -145,9 +145,9 @@ function showBoard(
 
   // The canvas is the board area: the window, or the part left of the open
   // dice sidebar (style.css). The observer below keeps its size, so a draw
-  // does not read the layout. The first read is for the first draw.
-  let width = canvas.clientWidth;
-  let height = canvas.clientHeight;
+  // does not read the layout. The first read is below, after the sidebar opens.
+  let width = 0;
+  let height = 0;
   /** The size and the pixel ratio of the last resize of the buffer. */
   let drawn = { width: 0, height: 0, ratio: 0 };
   const pixelRatio = () => Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
@@ -235,6 +235,9 @@ function showBoard(
     requestDraw();
   });
 
+  // The sidebar is open now, so this is the size of the first paint.
+  width = canvas.clientWidth;
+  height = canvas.clientHeight;
   draw();
 
   // This visitor's positions, which the server merged with the scene file.
