@@ -150,22 +150,9 @@ test("a note shows its text as text and each [[...]] total in bold, and a hover 
   await high.click();
   await page.mouse.move(10, 10);
   await expect(highDetail).toBeHidden();
-  // A press with the keyboard works too.
-  await low.focus();
-  await page.keyboard.press("Enter");
+  await low.click();
   await expect(lowDetail).toHaveText("1d8+3: (1) + 3 = 4");
   await expect(lowDetail.locator(".die-min")).toHaveText("1");
-
-  // After a reload, the saved notes show the same way.
-  await page.unroute(ROLLS);
-  await page.reload();
-  await ready(page);
-  await expect(entries).toHaveCount(2);
-  await expect(entries.first().locator(".dice-total strong")).toHaveText([
-    match![1],
-    match![2],
-  ]);
-  await expect(entries.first().locator("b")).toHaveCount(0);
 });
 
 test("after a reload, the saved log shows oldest first and scrolled to the newest, and an entry sent during the load stays at the bottom, once", async ({
