@@ -7,6 +7,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
+import type { Size } from "./point.js";
 
 /** The isometric angle above the ground: atan(1 / √2), about 35.26°. */
 const ELEVATION = Math.atan(1 / Math.SQRT2);
@@ -88,8 +89,7 @@ export class BoardCamera {
   readonly target: Vector3;
   private readonly box: Box3;
   private readonly content: ViewSize;
-  private width = 1;
-  private height = 1;
+  private readonly extent: Size = { width: 1, height: 1 };
   /** The quarter turns of the camera from the start. The current turn ends there. */
   private turns = 0;
   private angle = azimuthOf(0);
@@ -122,11 +122,19 @@ export class BoardCamera {
     return this.angle;
   }
 
+  /** The size of the view, in CSS pixels, as `resize` set it (at least 1 by 1). */
+  get size(): Readonly<Size> {
+    return this.extent;
+  }
+
   /** Sets the view for a window of this size, in CSS pixels. It keeps the target and the zoom. */
   resize(width: number, height: number): void {
-    this.width = Math.max(width, 1);
-    this.height = Math.max(height, 1);
-    Object.assign(this.camera, frustum(this.content, this.width / this.height));
+    this.extent.width = Math.max(width, 1);
+    this.extent.height = Math.max(height, 1);
+    Object.assign(
+      this.camera,
+      frustum(this.content, this.extent.width / this.extent.height),
+    );
     this.camera.zoom = MathUtils.clamp(
       this.camera.zoom,
       MIN_ZOOM,
@@ -193,7 +201,8 @@ export class BoardCamera {
     const keep = 1 - this.camera.zoom / zoom;
     const { x: tx, z: tz } = this.target;
     // The shift uses the board units of one pixel at the old zoom.
-    this.shift(-(x - this.width / 2) * keep, (this.height / 2 - y) * keep);
+    const { width, height } = this.extent;
+    this.shift(-(x - width / 2) * keep, (height / 2 - y) * keep);
     this.box.clampPoint(this.target, this.target);
     this.camera.zoom = zoom;
     this.camera.updateProjectionMatrix();
@@ -203,7 +212,10 @@ export class BoardCamera {
 
   /** The ray from the camera through `x`, `y` (CSS pixels from the top left of the view). The ray is shared: it is valid until the next call. */
   ray(x: number, y: number): Ray {
-    this.ndc.set((x / this.width) * 2 - 1, 1 - (y / this.height) * 2);
+    this.ndc.set(
+      (x / this.extent.width) * 2 - 1,
+      1 - (y / this.extent.height) * 2,
+    );
     this.raycaster.setFromCamera(this.ndc, this.camera);
     return this.raycaster.ray;
   }
@@ -215,8 +227,8 @@ export class BoardCamera {
   screenPoint(world: Vector3, out = new Vector2()): Vector2 {
     this.projected.copy(world).project(this.camera);
     return out.set(
-      ((this.projected.x + 1) / 2) * this.width,
-      ((1 - this.projected.y) / 2) * this.height,
+      ((this.projected.x + 1) / 2) * this.extent.width,
+      ((1 - this.projected.y) / 2) * this.extent.height,
     );
   }
 
@@ -226,13 +238,15 @@ export class BoardCamera {
    */
   unitsToPixels(units: number): number {
     const { left, right, zoom } = this.camera;
-    return (units * this.width * zoom) / (right - left);
+    return (units * this.extent.width * zoom) / (right - left);
   }
 
   /** Moves the target on the ground so that the board moves `dx`, `dy` CSS pixels on the screen. It does not clamp or place the camera. */
   private shift(dx: number, dy: number): void {
     const units =
-      (this.camera.right - this.camera.left) / this.camera.zoom / this.width;
+      (this.camera.right - this.camera.left) /
+      this.camera.zoom /
+      this.extent.width;
     const sin = Math.sin(this.angle);
     const cos = Math.cos(this.angle);
     // The camera stands at (sin, cos) of the angle from the target, so on the

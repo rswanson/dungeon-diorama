@@ -20,7 +20,7 @@ import type { BoardState } from "./board-state.js";
 import { easeOut, type BoardCamera } from "./camera.js";
 import type { SquareHighlight } from "./highlight.js";
 import type { PathLine } from "./pathline.js";
-import type { Point } from "./point.js";
+import type { Point, Size } from "./point.js";
 import { pickSquare } from "./picking.js";
 import type { SpriteLayer } from "./sprites.js";
 
@@ -59,10 +59,10 @@ interface Grab {
 
 /** The label near the pointer that gives the feet of the route. `BoardLabel` is one. */
 export interface RouteLabel {
-  /** Shows `text` near the canvas point `at`. */
-  showAt(text: string, at: Point): void;
-  /** Moves the label near the canvas point `at`. */
-  moveTo(at: Point): void;
+  /** Shows `text` near the canvas point `at`, in a board area of size `area`. */
+  showAt(text: string, at: Point, area: Size): void;
+  /** Moves the label near the canvas point `at`, in a board area of size `area`. */
+  moveTo(at: Point, area: Size): void;
   hide(): void;
 }
 
@@ -188,7 +188,7 @@ export class SpriteDrag {
     if (!this.drag) return;
     this.drag.pointer = at;
     this.retarget();
-    this.parts.label.moveTo(at);
+    this.parts.label.moveTo(at, this.parts.view.size);
   }
 
   /**
@@ -288,7 +288,7 @@ export class SpriteDrag {
     if (text === null) {
       label.hide();
     } else {
-      label.showAt(text, drag.pointer);
+      label.showAt(text, drag.pointer, this.parts.view.size);
     }
     if (!square) {
       highlight.hide();
