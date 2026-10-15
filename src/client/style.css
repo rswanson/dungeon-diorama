@@ -201,9 +201,10 @@ body {
 /*
  * The turn buttons need 104px (two 48px buttons and an 8px gap) to the left of
  * the sidebar, which is 320px wide, and 16px of space on each side:
- * 320 + 16 + 104 + 16 = 456px. On a narrower window, the sidebar hides them.
+ * 320 + 16 + 104 + 16 = 456px. On a window narrower than 456px, the sidebar
+ * hides them.
  */
-@media (max-width: 456px) {
+@media (max-width: 455px) {
   .dice-open .hud {
     display: none;
   }
