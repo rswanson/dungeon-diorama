@@ -58,6 +58,116 @@ test("/roll 2d6+1 adds an entry with each die, the modifier and the total", asyn
   expect(await scrolledToEnd(page)).toBe(true);
 });
 
+test("a note shows its text as text and each [[...]] total in bold, and a hover or a press on a total shows its dice", async ({
+  page,
+}) => {
+  const { input, entries, error } = sidebar(page);
+  await input.fill("<b>hi</b> I swing [[1d20+5]] for [[1d8+3]]");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+  await expect(input).toHaveValue("");
+  await expect(error).toBeEmpty();
+  const note = entries.first().locator(".dice-note");
+  // The text that looks like HTML shows as the same characters.
+  // innerText leaves out the hidden dice of each total.
+  const text = await note.innerText();
+  const match = /^<b>hi<\/b> I swing (\d+) for (\d+)$/.exec(text);
+  expect(match, text).not.toBeNull();
+  await expect(note.locator("b")).toHaveCount(0);
+  const totals = note.locator(".dice-total strong");
+  await expect(totals).toHaveText([match![1], match![2]]);
+
+  // A hover on a total shows its dice and its modifier.
+  const detail = note.locator(".dice-detail").first();
+  await expect(detail).toBeHidden();
+  await totals.first().hover();
+  await expect(detail).toBeVisible();
+  const line = /^1d20\+5: \((\d+)\) \+ 5 = (\d+)$/.exec(
+    (await detail.textContent()) ?? "",
+  );
+  expect(line, String(await detail.textContent())).not.toBeNull();
+  expect(Number(line![2])).toBe(Number(line![1]) + 5);
+  expect(line![2]).toBe(match![1]);
+  await page.mouse.move(10, 10);
+  await expect(detail).toBeHidden();
+
+  // A plain note has its text and no total.
+  await input.fill("I open the door");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(2);
+  await expect(entries.nth(1).locator(".dice-note")).toHaveText(
+    "I open the door",
+  );
+  await expect(entries.nth(1).locator(".dice-total")).toHaveCount(0);
+
+  // A press shows the dice, with the same green and red dice as a roll entry,
+  // until a second press. The server gives fixed dice here.
+  const roll = (
+    dice: string,
+    sides: number,
+    modifier: number,
+    die: number,
+  ) => ({
+    roll: {
+      dice,
+      count: 1,
+      sides,
+      modifier,
+      results: [die],
+      total: die + modifier,
+    },
+  });
+  await page.route(ROLLS, (route) =>
+    route.fulfill({
+      status: 201,
+      json: {
+        roll: {
+          id: Number.MAX_SAFE_INTEGER,
+          kind: "note",
+          at: new Date().toISOString(),
+          parts: [
+            roll("1d20+5", 20, 5, 20),
+            { text: " then " },
+            roll("1d8+3", 8, 3, 1),
+          ],
+        },
+      },
+    }),
+  );
+  await input.fill("[[1d20+5]] then [[1d8+3]]");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(3);
+  const fixed = entries.nth(2);
+  const [high, low] = [0, 1].map((i) => fixed.locator(".dice-total").nth(i));
+  const [highDetail, lowDetail] = [0, 1].map((i) =>
+    fixed.locator(".dice-detail").nth(i),
+  );
+  await high.click();
+  await page.mouse.move(10, 10);
+  await expect(highDetail).toHaveText("1d20+5: (20) + 5 = 25");
+  await expect(highDetail.locator(".die-max")).toHaveText("20");
+  await expect(high).toHaveAttribute("aria-expanded", "true");
+  await high.click();
+  await page.mouse.move(10, 10);
+  await expect(highDetail).toBeHidden();
+  // A press with the keyboard works too.
+  await low.focus();
+  await page.keyboard.press("Enter");
+  await expect(lowDetail).toHaveText("1d8+3: (1) + 3 = 4");
+  await expect(lowDetail.locator(".die-min")).toHaveText("1");
+
+  // After a reload, the saved notes show the same way.
+  await page.unroute(ROLLS);
+  await page.reload();
+  await ready(page);
+  await expect(entries).toHaveCount(2);
+  await expect(entries.first().locator(".dice-total strong")).toHaveText([
+    match![1],
+    match![2],
+  ]);
+  await expect(entries.first().locator("b")).toHaveCount(0);
+});
+
 test("after a reload, the saved log shows oldest first and scrolled to the newest, and an entry sent during the load stays at the bottom, once", async ({
   page,
 }) => {
