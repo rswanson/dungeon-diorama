@@ -54,7 +54,7 @@ Each batch merges to `main` with CI green. Claude then deploys `main` through Ca
 
 Added on 2026-10-14 with the spec amendment D26 and D27.
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** When the dice sidebar opens on a window 456px or wider, the board moves and resizes into the space left of the sidebar, so the sidebar covers none of it. When the sidebar closes, the board fills the window again. The zoom and the center stay the same.
 - **Acceptance criteria:**
   1. On a window 456px or wider, the canvas covers only the area left of the open sidebar (width = window width − 320px), and the full window when the sidebar is closed. The renderer and the camera use the canvas size, not the window size.
