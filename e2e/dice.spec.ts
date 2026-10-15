@@ -104,6 +104,28 @@ test("when the saved rolls do not load, the log is empty, a notice shows, and a 
   await expect(entries.first().locator(".dice-dice")).toHaveText("1d8");
 });
 
+test("on a narrow window, the log shows its newest entry when the sidebar opens", async ({
+  page,
+}) => {
+  const { toggle, panel, entries } = sidebar(page);
+  // Save enough entries to fill the log.
+  for (let n = 1; n <= 20; n++) {
+    const res = await page.request.post("/api/scenes/demo/rolls", {
+      data: { text: `/roll d20-${n}` },
+    });
+    expect(res.status()).toBe(201);
+  }
+  await page.setViewportSize({ width: 600, height: 800 });
+  await page.reload();
+  await ready(page);
+  // The sidebar is closed at the start, so the log cannot scroll yet.
+  await expect(panel).toBeHidden();
+  await toggle.click();
+  await expect(panel).toBeVisible();
+  await expect(entries).toHaveCount(20);
+  expect(await scrolledToEnd(page)).toBe(true);
+});
+
 test("an error shows under the input, keeps the text and logs nothing", async ({
   page,
 }) => {

@@ -33,6 +33,9 @@ export function showDiceSidebar(
     // The turn buttons move left of the open sidebar (style.css).
     document.body.classList.toggle("dice-open", open);
     toggle.setAttribute("aria-expanded", String(open));
+    // A hidden panel cannot scroll, so the log shows its newest entry when
+    // the panel shows.
+    if (open) log.scrollTop = log.scrollHeight;
   };
   toggle.addEventListener("click", () =>
     setOpen(toggle.getAttribute("aria-expanded") !== "true"),
