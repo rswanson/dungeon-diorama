@@ -293,6 +293,43 @@ describe.skipIf(!url)("the API on Postgres", () => {
     ]);
   });
 
+  it("rolls each [[...]] of a note, keeps the parts in order, and gives the same parts later", async () => {
+    const me = visitor();
+    const res = await roll(me, { text: "I swing [[1d20+5]] for [[1d8+3]]!" });
+    expect(res.status).toBe(201);
+    const { roll: entry } = (await res.json()) as { roll: Entry };
+    expect(entry).toMatchObject({
+      kind: "note",
+      parts: [
+        { text: "I swing " },
+        { roll: { dice: "1d20+5", count: 1, sides: 20, modifier: 5 } },
+        { text: " for " },
+        { roll: { dice: "1d8+3", count: 1, sides: 8, modifier: 3 } },
+        { text: "!" },
+      ],
+    });
+    for (const [i, sides, modifier] of [
+      [1, 20, 5],
+      [3, 8, 3],
+    ]) {
+      const { results, total } = (entry.parts[i] as { roll: Roll }).roll;
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeGreaterThanOrEqual(1);
+      expect(results[0]).toBeLessThanOrEqual(sides);
+      expect(total).toBe(results[0] + modifier);
+    }
+
+    const plain = await roll(me, { text: "I open the door" });
+    expect(plain.status).toBe(201);
+    const { roll: note } = (await plain.json()) as { roll: Entry };
+    expect(note).toMatchObject({
+      kind: "note",
+      parts: [{ text: "I open the door" }],
+    });
+
+    expect(await rolls(me)).toEqual([entry, note]);
+  });
+
   function getRolls(cookie: string, scene = "test") {
     return app.request(`/api/scenes/${scene}/rolls`, {
       headers: { Cookie: cookie },
@@ -335,7 +372,11 @@ describe.skipIf(!url)("the API on Postgres", () => {
         { text: "/roll 2d0" },
         "`2d0` is not valid dice. Use NdS±M, for example /roll 1d20+5.",
       ],
-      [{ text: "/dance" }, "Unknown command. Use /roll 1d20+5."],
+      [{ text: "/dance" }, "Unknown command. Use /roll 1d20+5 or [[1d20+5]]."],
+      [
+        { text: "I hit [[2d0]]" },
+        "`2d0` is not valid dice. Use NdS±M, for example [[1d20+5]].",
+      ],
       [{ text: "  " }, "The text is empty."],
       [{}, 'The body must be {"text": "..."}.'],
       [{ text: 5 }, 'The body must be {"text": "..."}.'],

@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type pg from "pg";
-import { parseInput, rollTerm, type Entry } from "../shared/dice.js";
+import { parseInput, rollTerm, type Entry, type Part } from "../shared/dice.js";
 import type { At, Layout } from "../shared/positions.js";
 import { isAt, onBoard } from "../shared/scene.js";
 import { message, withTransaction } from "./db.js";
@@ -169,14 +169,16 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
     if (parsed.kind === "error") return c.json({ error: parsed.error }, 400);
 
     // The roll exists only once its row saves: a failed insert gives 500.
-    const parts = [
-      { roll: rollTerm(parsed.term, (sides) => randomInt(1, sides + 1)) },
-    ];
+    const parts: Part[] = parsed.parts.map((part) =>
+      "term" in part
+        ? { roll: rollTerm(part.term, (sides) => randomInt(1, sides + 1)) }
+        : part,
+    );
     const { rows } = await db.query<RollRow>(
       `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
-         VALUES ($1, $2, 'roll', $3)
+         VALUES ($1, $2, $3, $4)
          RETURNING ${ROLL_COLUMNS}`,
-      [c.get("visitor"), name, JSON.stringify(parts)],
+      [c.get("visitor"), name, parsed.kind, JSON.stringify(parts)],
     );
     return c.json({ roll: toEntry(rows[0]) }, 201);
   });

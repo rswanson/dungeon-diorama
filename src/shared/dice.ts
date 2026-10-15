@@ -8,6 +8,9 @@ const MAX_COUNT = 100;
 const MIN_SIDES = 2;
 const MAX_SIDES = 100;
 const MAX_MODIFIER = 1000;
+/** The most `[[...]]` rolls in one note. */
+const MAX_NOTE_ROLLS = 10;
+const NOTE_EXAMPLE = "[[1d20+5]]";
 
 /** A dice term `NdS±M`, with `dice` in its normal form, for example `2d6+1`. */
 export interface DiceTerm {
@@ -35,11 +38,14 @@ export interface Entry {
   parts: Part[];
 }
 
-/** What `parseInput` gives. */
+/** A part of a parsed input before the roll: text, or a dice term. */
+export type ParsedPart = { text: string } | { term: DiceTerm };
+
+/** What `parseInput` gives. A `/roll` gives one part: its dice term. */
 export type ParsedInput =
   | { kind: "empty" }
   | { kind: "error"; error: string }
-  | { kind: "roll"; term: DiceTerm };
+  | { kind: "roll" | "note"; parts: ParsedPart[] };
 
 /** `[N]dS[±M]`, with spaces between the parts but not inside a number. */
 const TERM = /^(\d+)?\s*d\s*(\d+)\s*(?:([+-])\s*(\d+))?$/i;
@@ -77,8 +83,8 @@ export function formatModifier(modifier: number, gap = ""): string {
 
 /**
  * Reads one line of the dice input, after it removes the spaces at its start
- * and end. It gives a roll, an error message, or "empty" for an input with no
- * text (no error and no request).
+ * and end. It gives a roll, a note, an error message, or "empty" for an input
+ * with no text (no error and no request).
  */
 export function parseInput(input: string): ParsedInput {
   const text = input.trim();
@@ -92,14 +98,55 @@ export function parseInput(input: string): ParsedInput {
     if (dice === "") return error("Give the dice, for example /roll 1d20+5.");
     const term = parseTerm(dice);
     if (!term) {
+      return badDice(dice, "/roll 1d20+5");
+    }
+    return { kind: "roll", parts: [{ term }] };
+  }
+  if (text.startsWith("/")) {
+    return error("Unknown command. Use /roll 1d20+5 or [[1d20+5]].");
+  }
+  return parseNote(text);
+}
+
+/**
+ * Reads a note: its text and its `[[...]]` rolls, in the order of the text. A
+ * `]]` with no `[[` before it is text. For a bad `[[...]]`, the error names the
+ * text in the brackets. When the brackets hold no text, or the `]]` is
+ * missing, it names the text from the `[[` to the `]]` or to the end.
+ */
+function parseNote(text: string): ParsedInput {
+  const parts: ParsedPart[] = [];
+  const addText = (part: string) => {
+    if (part !== "") parts.push({ text: part });
+  };
+  let rolls = 0;
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("[[", at);
+    if (open < 0) break;
+    const close = text.indexOf("]]", open + 2);
+    if (close < 0) return badDice(text.slice(open), NOTE_EXAMPLE);
+    const dice = text.slice(open + 2, close).trim();
+    if (dice === "") return badDice(text.slice(open, close + 2), NOTE_EXAMPLE);
+    const term = parseTerm(dice);
+    if (!term) return badDice(dice, NOTE_EXAMPLE);
+    if (++rolls > MAX_NOTE_ROLLS) {
       return error(
-        `\`${dice}\` is not valid dice. Use NdS±M, for example /roll 1d20+5.`,
+        `Use at most ${MAX_NOTE_ROLLS} [[...]] rolls in one message.`,
       );
     }
-    return { kind: "roll", term };
+    addText(text.slice(at, open));
+    parts.push({ term });
+    at = close + 2;
   }
-  if (text.startsWith("/")) return error("Unknown command. Use /roll 1d20+5.");
-  return error("Start with /roll, for example /roll 1d20+5.");
+  addText(text.slice(at));
+  return { kind: "note", parts };
+}
+
+function badDice(part: string, example: string): ParsedInput {
+  return error(
+    `\`${part}\` is not valid dice. Use NdS±M, for example ${example}.`,
+  );
 }
 
 function error(message: string): ParsedInput {

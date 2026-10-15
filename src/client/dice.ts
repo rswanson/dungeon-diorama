@@ -1,4 +1,4 @@
-import { parseInput, type Entry } from "../shared/dice.js";
+import { parseInput, type Entry, type Roll } from "../shared/dice.js";
 import { sendRoll } from "./api.js";
 import { localTime, rollLine, type LineSegment } from "./diceline.js";
 import { showNotice } from "./notice.js";
@@ -45,6 +45,14 @@ export function showDiceSidebar(
     }
     scrollToNewest();
   };
+
+  // A press on the total of a note roll shows or hides its dice.
+  log.addEventListener("click", (e) => {
+    const total = (e.target as Element).closest(".dice-total");
+    if (!total) return;
+    const expanded = total.getAttribute("aria-expanded") === "true";
+    total.setAttribute("aria-expanded", String(!expanded));
+  });
 
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
@@ -101,28 +109,61 @@ export function showDiceSidebar(
   });
 }
 
-/** The log item of an entry: the dice, its result line and the local time. */
+/**
+ * The log item of an entry and its local time. A roll entry shows the dice and
+ * the result line. A note shows its text and the total of each roll.
+ */
 function entryItem(entry: Entry): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "dice-entry";
   const head = document.createElement("div");
   head.className = "dice-entry-head";
-  const line = document.createElement("div");
-  line.className = "dice-line";
-  for (const part of entry.parts) {
-    if (!("roll" in part)) continue;
-    const dice = document.createElement("span");
-    dice.className = "dice-dice";
-    dice.textContent = part.roll.dice;
-    head.append(dice);
-    line.append(...rollLine(part.roll).map(segmentNode));
-  }
   const time = document.createElement("time");
   time.dateTime = entry.at;
   time.textContent = localTime(entry.at);
+  const body = document.createElement("div");
+  if (entry.kind === "note") {
+    body.className = "dice-note";
+    for (const part of entry.parts) {
+      // A string goes in the page as a text node, never as HTML.
+      body.append("roll" in part ? noteRoll(part.roll) : part.text);
+    }
+  } else {
+    body.className = "dice-line";
+    for (const part of entry.parts) {
+      if (!("roll" in part)) continue;
+      const dice = document.createElement("span");
+      dice.className = "dice-dice";
+      dice.textContent = part.roll.dice;
+      head.append(dice);
+      body.append(...rollLine(part.roll).map(segmentNode));
+    }
+  }
   head.append(time);
-  item.append(head, line);
+  item.append(head, body);
   return item;
+}
+
+/**
+ * A roll in a note: its total in bold, as a button. A hover on it, or a press
+ * (a tap, a click, Enter or Space) shows its dice under it, for example
+ * `1d20+5: (17) + 5 = 22` (style.css). A second press hides them.
+ */
+function noteRoll(roll: Roll): HTMLElement {
+  const total = document.createElement("button");
+  total.type = "button";
+  total.className = "dice-total";
+  total.setAttribute("aria-expanded", "false");
+  const bold = document.createElement("strong");
+  bold.textContent = String(roll.total);
+  total.append(bold);
+  const detail = document.createElement("span");
+  detail.className = "dice-detail";
+  detail.append(`${roll.dice}: `, ...rollLine(roll).map(segmentNode));
+  const wrap = document.createElement("span");
+  wrap.className = "dice-roll";
+  wrap.append(total, detail);
+  return wrap;
 }
 
 function segmentNode({ text, style }: LineSegment): Node {

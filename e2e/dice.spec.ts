@@ -1,4 +1,5 @@
 import { expect, type Page, type Route } from "@playwright/test";
+import { parseTerm, rollTerm } from "../src/shared/dice.js";
 import { hook, ready, test } from "./fixtures.js";
 
 const ROLLS = "**/api/scenes/*/rolls";
@@ -56,6 +57,92 @@ test("/roll 2d6+1 adds an entry with each die, the modifier and the total", asyn
   }
   await expect(entries.last().locator(".dice-dice")).toHaveText("1d20-15");
   expect(await scrolledToEnd(page)).toBe(true);
+});
+
+test("a note shows its text as text and each [[...]] as a bold total that shows its dice on hover", async ({
+  page,
+}) => {
+  const { input, entries, error } = sidebar(page);
+  await input.fill("<b>hi</b> I swing [[1d20+5]] for [[1d8+3]]");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+  await expect(input).toHaveValue("");
+  await expect(error).toBeEmpty();
+  const note = entries.first().locator(".dice-note");
+  // The text that looks like HTML shows as the same characters.
+  // innerText leaves out the hidden dice of each total.
+  const text = await note.innerText();
+  const match = /^<b>hi<\/b> I swing (\d+) for (\d+)$/.exec(text);
+  expect(match, text).not.toBeNull();
+  await expect(note.locator("b")).toHaveCount(0);
+  const totals = note.locator(".dice-total strong");
+  await expect(totals).toHaveText([match![1], match![2]]);
+
+  // A hover on a total shows its dice and its modifier.
+  const detail = note.locator(".dice-detail").first();
+  await expect(detail).toBeHidden();
+  await totals.first().hover();
+  await expect(detail).toBeVisible();
+  const line = /^1d20\+5: \((\d+)\) \+ 5 = (\d+)$/.exec(
+    (await detail.textContent()) ?? "",
+  );
+  expect(line, String(await detail.textContent())).not.toBeNull();
+  expect(Number(line![2])).toBe(Number(line![1]) + 5);
+  expect(line![2]).toBe(match![1]);
+  await page.mouse.move(10, 10);
+  await expect(detail).toBeHidden();
+
+  // A plain note has its text and no total.
+  await input.fill("I open the door");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(2);
+  await expect(entries.nth(1).locator(".dice-note")).toHaveText(
+    "I open the door",
+  );
+  await expect(entries.nth(1).locator(".dice-total")).toHaveCount(0);
+});
+
+test("a press on a total shows its dice until a second press, with the green and red dice of a roll entry", async ({
+  page,
+}) => {
+  const { input, entries } = sidebar(page);
+  // The server gives fixed dice here.
+  const roll = (dice: string, die: number) => ({
+    roll: rollTerm(parseTerm(dice)!, () => die),
+  });
+  await page.route(ROLLS, (route) =>
+    route.fulfill({
+      status: 201,
+      json: {
+        roll: {
+          id: Number.MAX_SAFE_INTEGER,
+          kind: "note",
+          at: new Date().toISOString(),
+          parts: [roll("1d20+5", 20), { text: " then " }, roll("1d8+3", 1)],
+        },
+      },
+    }),
+  );
+  await input.fill("[[1d20+5]] then [[1d8+3]]");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+  const fixed = entries.first();
+  const totals = fixed.locator(".dice-total");
+  const details = fixed.locator(".dice-detail");
+  await totals.nth(0).click();
+  await page.mouse.move(10, 10);
+  await expect(details.nth(0)).toBeVisible();
+  await expect(details.nth(0)).toHaveText("1d20+5: (20) + 5 = 25");
+  await expect(details.nth(0).locator(".die-max")).toHaveText("20");
+  await expect(totals.nth(0)).toHaveAttribute("aria-expanded", "true");
+  await totals.nth(0).click();
+  await page.mouse.move(10, 10);
+  await expect(details.nth(0)).toBeHidden();
+  await totals.nth(1).click();
+  await page.mouse.move(10, 10);
+  await expect(details.nth(1)).toBeVisible();
+  await expect(details.nth(1)).toHaveText("1d8+3: (1) + 3 = 4");
+  await expect(details.nth(1).locator(".die-min")).toHaveText("1");
 });
 
 test("after a reload, the saved log shows oldest first and scrolled to the newest, and an entry sent during the load stays at the bottom, once", async ({

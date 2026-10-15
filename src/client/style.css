@@ -285,14 +285,51 @@ body {
 
 .dice-entry-head {
   display: flex;
-  justify-content: space-between;
   gap: 8px;
   font-weight: 600;
 }
 
 .dice-entry-head time {
+  margin-left: auto;
   font-size: 0.8rem;
   font-weight: 400;
+}
+
+/* The total of a roll in a note. A hover or a press shows its dice under it. */
+.dice-total {
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px dotted var(--ink);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dice-total:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.dice-detail {
+  display: none;
+  margin: 2px 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--parchment-light);
+  font-size: 0.9rem;
+}
+
+.dice-total[aria-expanded="true"] + .dice-detail {
+  display: block;
+}
+
+/* Only a real hover: on a touch screen, a tap shows and hides the dice. */
+@media (hover: hover) {
+  .dice-total:hover + .dice-detail {
+    display: block;
+  }
 }
 
 .die-max,
