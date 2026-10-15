@@ -34,6 +34,11 @@ describe("parseInput", () => {
   });
 
   it("gives the error of each bad input", () => {
+    // Exactly 500 characters is valid.
+    expect(parseInput(`/roll 1d6${" ".repeat(491)}`)).toEqual({
+      kind: "roll",
+      term: { dice: "1d6", count: 1, sides: 6, modifier: 0 },
+    });
     expect(parseInput(`/roll ${"1".repeat(495)}`)).toEqual({
       kind: "error",
       error: "Use at most 500 characters.",
