@@ -285,7 +285,6 @@ body {
 
 .dice-entry-head {
   display: flex;
-  justify-content: space-between;
   gap: 8px;
   font-weight: 600;
 }

@@ -46,6 +46,14 @@ export function showDiceSidebar(
     scrollToNewest();
   };
 
+  // A press on the total of a note roll shows or hides its dice.
+  log.addEventListener("click", (e) => {
+    const total = (e.target as Element).closest(".dice-total");
+    if (!total) return;
+    const shown = total.getAttribute("aria-expanded") === "true";
+    total.setAttribute("aria-expanded", String(!shown));
+  });
+
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
     sidebar.classList.toggle("open", open);
@@ -113,29 +121,26 @@ function entryItem(entry: Entry): HTMLLIElement {
   const time = document.createElement("time");
   time.dateTime = entry.at;
   time.textContent = localTime(entry.at);
+  const body = document.createElement("div");
   if (entry.kind === "note") {
-    const note = document.createElement("div");
-    note.className = "dice-note";
+    body.className = "dice-note";
     for (const part of entry.parts) {
       // A string goes in the page as a text node, never as HTML.
-      note.append("roll" in part ? noteRoll(part.roll) : part.text);
+      body.append("roll" in part ? noteRoll(part.roll) : part.text);
     }
-    head.append(time);
-    item.append(head, note);
-    return item;
-  }
-  const line = document.createElement("div");
-  line.className = "dice-line";
-  for (const part of entry.parts) {
-    if (!("roll" in part)) continue;
-    const dice = document.createElement("span");
-    dice.className = "dice-dice";
-    dice.textContent = part.roll.dice;
-    head.append(dice);
-    line.append(...rollLine(part.roll).map(segmentNode));
+  } else {
+    body.className = "dice-line";
+    for (const part of entry.parts) {
+      if (!("roll" in part)) continue;
+      const dice = document.createElement("span");
+      dice.className = "dice-dice";
+      dice.textContent = part.roll.dice;
+      head.append(dice);
+      body.append(...rollLine(part.roll).map(segmentNode));
+    }
   }
   head.append(time);
-  item.append(head, line);
+  item.append(head, body);
   return item;
 }
 
@@ -152,10 +157,6 @@ function noteRoll(roll: Roll): HTMLElement {
   const bold = document.createElement("strong");
   bold.textContent = String(roll.total);
   total.append(bold);
-  total.addEventListener("click", () => {
-    const shown = total.getAttribute("aria-expanded") === "true";
-    total.setAttribute("aria-expanded", String(!shown));
-  });
   const detail = document.createElement("span");
   detail.className = "dice-detail";
   detail.append(`${roll.dice}: `, ...rollLine(roll).map(segmentNode));
