@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { expect, test as base, type Page } from "@playwright/test";
-import type { Diorama } from "../src/shared/diorama.js";
+import { expect, type Page } from "@playwright/test";
 import { findPath } from "../src/shared/path.js";
 import { parseScene, squareKey, type Scene } from "../src/shared/scene.js";
 import { CLICK_SLOP } from "../src/client/press.js";
+import { hook, ready, test } from "./fixtures.js";
 
 type Square = [number, number];
 
@@ -34,52 +34,6 @@ const NUDGE_PX = CLICK_SLOP + 2;
 const NUDGE_STEPS = 2;
 /** The mouse moves to a square in this many steps, so the drag sees the squares on the way. */
 const MOVE_STEPS = 12;
-
-// Each test fails when the page threw an error, also after the drag.
-const test = base.extend<{ pageErrors: Error[] }>({
-  pageErrors: [
-    async ({ page }, use) => {
-      const errors: Error[] = [];
-      page.on("pageerror", (error) => errors.push(error));
-      await use(errors);
-      expect(errors).toEqual([]);
-    },
-    { auto: true },
-  ],
-});
-
-type Args<K extends keyof Diorama> = Diorama[K] extends (
-  ...args: infer A
-) => unknown
-  ? A
-  : [];
-type Result<K extends keyof Diorama> = Diorama[K] extends (
-  ...args: never[]
-) => infer R
-  ? R
-  : Diorama[K];
-
-/**
- * Reads `name` from the page's `window.diorama` (src/client/hook.ts), and
- * calls it with `args` when it is a method. It gives null before the page
- * made the hook.
- */
-function hook<K extends keyof Diorama>(
-  page: Page,
-  name: K,
-  ...args: Args<K>
-): Promise<Result<K> | null> {
-  return page.evaluate(
-    ([name, args]) => {
-      const diorama = (globalThis as { diorama?: Diorama }).diorama;
-      const value: unknown = diorama?.[name];
-      return typeof value === "function"
-        ? value.apply(diorama, args)
-        : (value ?? null);
-    },
-    [name, args] as const,
-  ) as Promise<Result<K> | null>;
-}
 
 /**
  * Presses on the middle of a sprite. It gives back a function that moves the
@@ -118,16 +72,6 @@ async function grab(
       return pointer;
     },
   };
-}
-
-/** Waits until the board and each sprite show. */
-async function ready(page: Page): Promise<void> {
-  // Each sprite stands on the board only when WebGL works.
-  await expect
-    .poll(() => hook(page, "ready"), {
-      message: "the board and its sprites show",
-    })
-    .toBe(true);
 }
 
 // Each test has a browser context of its own, so it is a new visitor with no
