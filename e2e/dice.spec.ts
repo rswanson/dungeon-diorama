@@ -113,6 +113,7 @@ test("an error shows under the input, keeps the text and logs nothing", async ({
   // During a send, a second Enter does nothing. A 5xx shows its own error.
   await input.press("Enter");
   await expect.poll(() => sends.length).toBe(2);
+  await expect(input).toHaveJSProperty("readOnly", true);
   await input.press("Enter");
   await sends[1].fulfill({
     status: 500,
@@ -212,11 +213,9 @@ test("a press on the sidebar does not pan, and Q, E and Esc in the input are tex
   // Outside the input, Q turns the camera as before. E turns it back.
   await input.blur();
   await page.keyboard.press("q");
-  await page.waitForTimeout(500);
-  expect(await squareScreen(page, 0, 0)).not.toEqual(panned);
+  await expect.poll(async () => squareScreen(page, 0, 0)).not.toEqual(panned);
   await page.keyboard.press("e");
-  await page.waitForTimeout(500);
-  expect(await squareScreen(page, 0, 0)).toEqual(panned);
+  await expect.poll(async () => squareScreen(page, 0, 0)).toEqual(panned);
 
   // Esc in the input does not cancel a drag.
   const fighter = await page.evaluate(() =>

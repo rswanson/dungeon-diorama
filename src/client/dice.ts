@@ -44,6 +44,8 @@ export function showDiceSidebar(scene: string): void {
       return;
     }
     sending = true;
+    // The text cannot change while it sends, so a 201 clears what was sent.
+    input.readOnly = true;
     errorLine.textContent = "";
     try {
       const result = await sendRoll(scene, text);
@@ -56,6 +58,7 @@ export function showDiceSidebar(scene: string): void {
       input.value = "";
     } finally {
       sending = false;
+      input.readOnly = false;
     }
   };
 
