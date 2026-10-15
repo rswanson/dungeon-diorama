@@ -13,7 +13,7 @@ function clamp(value: number, max: number): number {
 /**
  * A small parchment label. It stands above an object on the board (`show`),
  * or near the pointer (`showAt`). A label near the pointer stays in `area`,
- * which starts at the top left of the window (the canvas, or the window).
+ * which starts at the top left of the window (the canvas).
  */
 export class BoardLabel {
   private readonly element: HTMLElement;
@@ -29,8 +29,12 @@ export class BoardLabel {
   constructor({
     className,
     parent = document.body,
-    area = document.documentElement,
-  }: { className?: string; parent?: HTMLElement; area?: Element } = {}) {
+    area,
+  }: {
+    className?: string;
+    parent?: HTMLElement;
+    area: Element;
+  }) {
     this.area = area;
     this.element = document.createElement("div");
     this.element.className = className

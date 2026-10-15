@@ -109,7 +109,7 @@ function showBoard(
   // The board hides a sprite behind it from a click.
   const sprites = new SpriteLayer(file.board, [board]);
   scene.add(sprites.group);
-  const label = new BoardLabel();
+  const label = new BoardLabel({ area: canvas });
   // Where each sprite stands: the scene file layout until this visitor's
   // positions load.
   const state = new BoardState(file.board, file.sprites);
@@ -201,8 +201,11 @@ function showBoard(
   });
 
   // A window resize and an open or a close of the dice sidebar change the
-  // size of the canvas. A window resize can also change the pixel ratio.
-  new ResizeObserver(requestDraw).observe(canvas);
+  // size of the canvas. A window resize can also change the pixel ratio. The
+  // observer draws at once, before the browser paints, so no frame shows the
+  // old buffer stretched into the new box. A draw that `requestDraw` queued
+  // earlier draws the same view again, which does no harm.
+  new ResizeObserver(() => draw()).observe(canvas);
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
