@@ -3,7 +3,14 @@ import { expect, type Page } from "@playwright/test";
 import { findPath } from "../src/shared/path.js";
 import { parseScene, squareKey, type Scene } from "../src/shared/scene.js";
 import { CLICK_SLOP } from "../src/client/press.js";
-import { boardArea, hook, ready, test } from "./fixtures.js";
+import {
+  boardArea,
+  diceToggle,
+  hook,
+  ready,
+  test,
+  zoomAt,
+} from "./fixtures.js";
 
 type Square = [number, number];
 
@@ -73,9 +80,6 @@ async function grab(
     },
   };
 }
-
-/** The Dice button, which opens and closes the dice sidebar. */
-const diceToggle = (page: Page) => page.getByRole("button", { name: "Dice" });
 
 // Each test has a browser context of its own, so it is a new visitor with no
 // saved moves: the fighter stands on its square of the scene file. The window
@@ -153,12 +157,7 @@ test("a right-drag pan and a wheel zoom keep the square under the pointer", asyn
 
   // The zoom keeps the board point under the pointer at the pointer.
   const at = { x: Math.round(panned.x), y: Math.round(panned.y) };
-  await page.mouse.move(at.x, at.y);
-  const near = (await hook(page, "squareScreen", FREE[0] + 2, FREE[1]))!;
-  await page.mouse.wheel(0, -200);
-  await expect
-    .poll(() => hook(page, "squareScreen", FREE[0] + 2, FREE[1]))
-    .not.toEqual(near);
+  await zoomAt(page, at, -200, [FREE[0] + 2, FREE[1]]);
   // The square was less than 0.5px from the pointer, so the zoom moves it less than 1px.
   const zoomed = await square();
   expect(Math.abs(zoomed.x - at.x)).toBeLessThan(1);
@@ -341,12 +340,7 @@ test("the route label stays inside the board area near its right edge", async ({
   // Zoom in at the left, so a free square lies near the right edge of the
   // board area, which the open sidebar bounds.
   const near: Square = [11, 6];
-  const before = (await hook(page, "squareScreen", ...near))!;
-  await page.mouse.move(100, 360);
-  await page.mouse.wheel(0, -300);
-  await expect
-    .poll(() => hook(page, "squareScreen", ...near))
-    .not.toEqual(before);
+  await zoomAt(page, { x: 100, y: 360 }, -300, near);
   const held = await grab(page, "wizard");
   const pointer = await held.moveTo(near);
   expect(await hook(page, "dragTarget")).toEqual(near);

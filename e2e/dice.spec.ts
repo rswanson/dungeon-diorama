@@ -1,13 +1,20 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import { parseTerm, rollTerm } from "../src/shared/dice.js";
-import { boardArea, hook, ready, test } from "./fixtures.js";
+import {
+  boardArea,
+  diceToggle,
+  hook,
+  ready,
+  test,
+  zoomAt,
+} from "./fixtures.js";
 
 const ROLLS = "**/api/scenes/*/rolls";
 
 /** The dice input, its log entries and its error line. */
 function sidebar(page: Page) {
   return {
-    toggle: page.getByRole("button", { name: "Dice" }),
+    toggle: diceToggle(page),
     panel: page.locator(".dice-panel"),
     input: page.getByRole("textbox", { name: "Dice roll" }),
     entries: page.locator(".dice-log li"),
@@ -412,10 +419,7 @@ test("the board fits left of the open sidebar, and keeps its zoom and center whe
     (await hook(page, "squareScreen", 0, 0))!,
     (await hook(page, "squareScreen", 15, 11))!,
   ];
-  const start = await corners();
-  await page.mouse.move(300, 300);
-  await page.mouse.wheel(0, -200);
-  await expect.poll(corners).not.toEqual(start);
+  await zoomAt(page, { x: 300, y: 300 }, -200, [0, 0]);
   const zoomed = await corners();
   /** The corners are where `zoomed` puts them, `dx` px to the right. */
   const expectCorners = async (dx: number) => {
