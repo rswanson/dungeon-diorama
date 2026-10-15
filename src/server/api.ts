@@ -26,6 +26,9 @@ const MAX_MOVE_BYTES = 1024;
 /** The body of a roll is `{"text": "..."}` with at most 500 characters, so a body of more than this many bytes is an error (413). */
 const MAX_ROLL_BYTES = 4096;
 
+/** The GET of the rolls gives this many entries: the newest ones. */
+const LOG_SIZE = 50;
+
 /**
  * Reads the body of a move: `{"at": [x, z]}` with two whole numbers. It gives
  * null for any other body.
@@ -169,23 +172,53 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
     const parts = [
       { roll: rollTerm(parsed.term, (sides) => randomInt(1, sides + 1)) },
     ];
-    const { rows } = await db.query<{ id: string; rolled_at: Date }>(
+    const { rows } = await db.query<RollRow>(
       `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
          VALUES ($1, $2, 'roll', $3)
-         RETURNING id, rolled_at`,
+         RETURNING ${ROLL_COLUMNS}`,
       [c.get("visitor"), name, JSON.stringify(parts)],
     );
-    const entry: Entry = {
-      // A bigserial comes back as text.
-      id: Number(rows[0].id),
-      kind: "roll",
-      at: rows[0].rolled_at.toISOString(),
-      parts,
-    };
-    return c.json({ roll: entry }, 201);
+    return c.json({ roll: toEntry(rows[0]) }, 201);
+  });
+
+  api.get("/scenes/:scene/rolls", async (c) => {
+    const name = c.req.param("scene");
+    if (!(await scenes.get(name))) {
+      return notFound(c, "The scene does not exist.");
+    }
+    // The index (visitor_id, scene, id DESC) gives the newest rows first.
+    const { rows } = await db.query<RollRow>(
+      `SELECT ${ROLL_COLUMNS} FROM dice_rolls
+        WHERE visitor_id = $1 AND scene = $2
+        ORDER BY id DESC
+        LIMIT $3`,
+      [c.get("visitor"), name, LOG_SIZE],
+    );
+    return c.json({ rolls: rows.reverse().map(toEntry) });
   });
 
   return api;
+}
+
+/** A row of `dice_rolls`, as the API reads it. */
+interface RollRow {
+  /** A bigserial comes back as text. */
+  id: string;
+  kind: Entry["kind"];
+  parts: Entry["parts"];
+  rolled_at: Date;
+}
+
+const ROLL_COLUMNS = "id, kind, parts, rolled_at";
+
+/** The entry that the API gives for a row of `dice_rolls`. */
+function toEntry(row: RollRow): Entry {
+  return {
+    id: Number(row.id),
+    kind: row.kind,
+    at: row.rolled_at.toISOString(),
+    parts: row.parts,
+  };
 }
 
 function notFound(c: Context, error: string) {

@@ -28,6 +28,7 @@ describe.skipIf(!url)("the API on Postgres", () => {
   const schema = `test_${randomUUID().replaceAll("-", "")}`;
   const scenesDir = mkdtempSync(join(tmpdir(), "dd-api-"));
   writeFileSync(join(scenesDir, "test.json"), JSON.stringify(SCENE));
+  writeFileSync(join(scenesDir, "other.json"), JSON.stringify(SCENE));
   let admin: pg.Pool;
   let db: pg.Pool;
   let app: Hono;
@@ -292,6 +293,41 @@ describe.skipIf(!url)("the API on Postgres", () => {
     ]);
   });
 
+  function getRolls(cookie: string, scene = "test") {
+    return app.request(`/api/scenes/${scene}/rolls`, {
+      headers: { Cookie: cookie },
+    });
+  }
+
+  /** The entries of the GET, which must answer 200. */
+  async function rolls(cookie: string, scene = "test") {
+    const res = await getRolls(cookie, scene);
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { rolls: Entry[] }).rolls;
+  }
+
+  it("gives the entries of this visitor and scene only, and none to a new visitor", async () => {
+    const me = visitor();
+    expect(await rolls(me)).toEqual([]);
+    const { roll: entry } = (await (
+      await roll(me, { text: "/roll 2d6+1" })
+    ).json()) as { roll: Entry };
+    expect(await rolls(me)).toEqual([entry]);
+    expect(await rolls(visitor())).toEqual([]);
+    expect(await rolls(me, "other")).toEqual([]);
+  });
+
+  it("gives the newest 50 of 51 entries, oldest first", async () => {
+    const me = visitor();
+    for (let n = 1; n <= 51; n++) {
+      expect((await roll(me, { text: `/roll 1d6+${n}` })).status).toBe(201);
+    }
+    const dice = (await rolls(me)).map(
+      (entry) => (entry.parts[0] as { roll: Roll }).roll.dice,
+    );
+    expect(dice).toEqual(Array.from({ length: 50 }, (_, i) => `1d6+${i + 2}`));
+  });
+
   it("answers 400 for bad dice, an unknown command, empty text or a body with no text, and saves nothing", async () => {
     const me = visitor();
     const cases: [unknown, string][] = [
@@ -317,13 +353,16 @@ describe.skipIf(!url)("the API on Postgres", () => {
     expect(rows).toEqual([]);
   });
 
-  it("answers 404 for an unknown scene and 413 for a body of more than 4 KB", async () => {
+  it("answers 404 to a POST or a GET of an unknown scene, and 413 for a POST of more than 4 KB", async () => {
     const me = visitor();
     const missing = await roll(me, { text: "/roll 1d6" }, "nowhere");
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({
       error: "The scene does not exist.",
     });
+    const noLog = await getRolls(me, "nowhere");
+    expect(noLog.status).toBe(404);
+    expect(await noLog.json()).toEqual({ error: "The scene does not exist." });
     const big = await roll(me, { text: "/roll 1d6", pad: "x".repeat(4096) });
     expect(big.status).toBe(413);
     expect(await big.json()).toEqual({ error: "The body is too large." });

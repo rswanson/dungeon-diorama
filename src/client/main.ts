@@ -9,13 +9,14 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import type { Entry } from "../shared/dice.js";
 import type { Layout } from "../shared/positions.js";
 import {
   isSceneName,
   parseScene,
   type Scene as SceneFile,
 } from "../shared/scene.js";
-import { loadPositions, savePosition } from "./api.js";
+import { loadPositions, loadRolls, savePosition } from "./api.js";
 import { createBoardMesh } from "./board.js";
 import { BoardState } from "./board-state.js";
 import { BoardCamera } from "./camera.js";
@@ -76,12 +77,14 @@ async function loadScene(name: string): Promise<SceneFile> {
 
 /**
  * Shows the scene `name` from its file. `saved` gives this visitor's
- * positions, or null when they did not load.
+ * positions, and `rolls` this visitor's dice log, or null when they did not
+ * load.
  */
 function showBoard(
   name: string,
   file: SceneFile,
   saved: Promise<Layout | null>,
+  rolls: Promise<Entry[] | null>,
 ): void {
   const canvas = document.querySelector<HTMLCanvasElement>("#scene");
   if (!canvas) throw new Error("The page has no #scene canvas.");
@@ -198,7 +201,7 @@ function showBoard(
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
-  showDiceSidebar(name);
+  showDiceSidebar(name, rolls);
 
   // A click shows the name of the sprite that the press grabbed.
   attachPointer(canvas, controls, drag, (grab) => {
@@ -252,15 +255,21 @@ function showBoard(
 async function main(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const name = params.get("scene") ?? "demo";
-  // The positions load at the same time as the scene file.
-  const saved = isSceneName(name)
-    ? loadPositions(name).catch((error: unknown) => {
-        console.warn("The saved moves did not load:", error);
-        return null;
-      })
-    : Promise.resolve(null);
+  // The positions and the dice log load at the same time as the scene file.
+  const loadOrNull = <T>(
+    load: (scene: string) => Promise<T>,
+    what: string,
+  ): Promise<T | null> =>
+    isSceneName(name)
+      ? load(name).catch((error: unknown) => {
+          console.warn(`The saved ${what} did not load:`, error);
+          return null;
+        })
+      : Promise.resolve(null);
+  const saved = loadOrNull(loadPositions, "moves");
+  const rolls = loadOrNull(loadRolls, "rolls");
   try {
-    showBoard(name, await loadScene(name), saved);
+    showBoard(name, await loadScene(name), saved, rolls);
   } catch (error) {
     if (error instanceof SceneError) {
       showErrorPanel(error.heading, error.problems);

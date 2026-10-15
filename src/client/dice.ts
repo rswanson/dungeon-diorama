@@ -1,16 +1,22 @@
 import { parseInput, type Entry } from "../shared/dice.js";
 import { sendRoll } from "./api.js";
 import { localTime, rollLine, type LineSegment } from "./diceline.js";
+import { showNotice } from "./notice.js";
 
 /** The sidebar is open at the start on a window this wide or wider. */
 const OPEN_AT_START = "(min-width: 768px)";
 
 /**
  * Shows the dice sidebar (`.dice` in `index.html`) for `scene`: its log, its
- * error line and its input. Enter in the input sends the text, and the server
- * rolls and saves it. All text goes in the page as text, never as HTML.
+ * error line and its input. `saved` gives this visitor's saved entries, oldest
+ * first, or null when they did not load. Enter in the input sends the text,
+ * and the server rolls and saves it. All text goes in the page as text, never
+ * as HTML.
  */
-export function showDiceSidebar(scene: string): void {
+export function showDiceSidebar(
+  scene: string,
+  saved: Promise<Entry[] | null>,
+): void {
   const sidebar = document.querySelector<HTMLElement>(".dice");
   const toggle = sidebar?.querySelector<HTMLButtonElement>(".dice-toggle");
   const panel = sidebar?.querySelector<HTMLElement>(".dice-panel");
@@ -21,12 +27,33 @@ export function showDiceSidebar(scene: string): void {
     throw new Error("The page has no dice sidebar.");
   }
 
+  const scrollToNewest = (): void => {
+    log.scrollTop = log.scrollHeight;
+  };
+  // The log items by entry id. The ids only increase.
+  const shown = new Map<number, HTMLLIElement>();
+  /** Adds the entries that the log does not show, in id order. */
+  const addEntries = (entries: Entry[]): void => {
+    for (const entry of entries) {
+      if (shown.has(entry.id)) continue;
+      const item = entryItem(entry);
+      const next = [...shown]
+        .filter(([id]) => id > entry.id)
+        .sort(([a], [b]) => a - b)[0];
+      log.insertBefore(item, next ? next[1] : null);
+      shown.set(entry.id, item);
+    }
+    scrollToNewest();
+  };
+
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
     sidebar.classList.toggle("open", open);
     // The turn buttons move left of the open sidebar (style.css).
     document.body.classList.toggle("dice-open", open);
     toggle.setAttribute("aria-expanded", String(open));
+    // A hidden panel cannot scroll, so the log scrolls when the panel shows.
+    if (open) scrollToNewest();
   };
   toggle.addEventListener("click", () =>
     setOpen(toggle.getAttribute("aria-expanded") !== "true"),
@@ -52,8 +79,7 @@ export function showDiceSidebar(scene: string): void {
         errorLine.textContent = result.error;
         return;
       }
-      log.append(entryItem(result.entry));
-      log.scrollTop = log.scrollHeight;
+      addEntries([result.entry]);
       input.value = "";
     } finally {
       input.readOnly = false;
@@ -68,6 +94,11 @@ export function showDiceSidebar(scene: string): void {
   });
 
   sidebar.hidden = false;
+
+  void saved.then((entries) => {
+    if (entries) addEntries(entries);
+    else showNotice("Saved rolls did not load");
+  });
 }
 
 /** The log item of an entry: the dice, its result line and the local time. */
