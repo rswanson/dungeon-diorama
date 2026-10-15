@@ -293,10 +293,15 @@ describe.skipIf(!url)("the API on Postgres", () => {
     ]);
   });
 
-  async function rolls(cookie: string, scene = "test") {
-    const res = await app.request(`/api/scenes/${scene}/rolls`, {
+  function getRolls(cookie: string, scene = "test") {
+    return app.request(`/api/scenes/${scene}/rolls`, {
       headers: { Cookie: cookie },
     });
+  }
+
+  /** The entries of the GET, which must answer 200. */
+  async function rolls(cookie: string, scene = "test") {
+    const res = await getRolls(cookie, scene);
     expect(res.status).toBe(200);
     return ((await res.json()) as { rolls: Entry[] }).rolls;
   }
@@ -355,9 +360,7 @@ describe.skipIf(!url)("the API on Postgres", () => {
     expect(await missing.json()).toEqual({
       error: "The scene does not exist.",
     });
-    const noLog = await app.request("/api/scenes/nowhere/rolls", {
-      headers: { Cookie: me },
-    });
+    const noLog = await getRolls(me, "nowhere");
     expect(noLog.status).toBe(404);
     expect(await noLog.json()).toEqual({ error: "The scene does not exist." });
     const big = await roll(me, { text: "/roll 1d6", pad: "x".repeat(4096) });
