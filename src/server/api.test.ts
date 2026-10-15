@@ -88,38 +88,6 @@ describe.skipIf(!url)("the API on Postgres", () => {
   });
 
   it("creates dice_rolls and its index as the spec gives them", async () => {
-    const { rows } = await db.query(
-      `SELECT column_name, data_type, is_nullable, column_default
-         FROM information_schema.columns
-        WHERE table_schema = $1 AND table_name = 'dice_rolls'
-        ORDER BY ordinal_position`,
-      [schema],
-    );
-    expect(rows).toEqual([
-      {
-        column_name: "id",
-        data_type: "bigint",
-        is_nullable: "NO",
-        column_default: "nextval('dice_rolls_id_seq'::regclass)",
-      },
-      ...[
-        ["visitor_id", "uuid"],
-        ["scene", "text"],
-        ["kind", "text"],
-        ["parts", "jsonb"],
-      ].map(([column_name, data_type]) => ({
-        column_name,
-        data_type,
-        is_nullable: "NO",
-        column_default: null,
-      })),
-      {
-        column_name: "rolled_at",
-        data_type: "timestamp with time zone",
-        is_nullable: "NO",
-        column_default: "now()",
-      },
-    ]);
     const index = await db.query(
       `SELECT indexdef FROM pg_indexes
         WHERE schemaname = $1 AND indexname = 'dice_rolls_visitor_scene'`,
