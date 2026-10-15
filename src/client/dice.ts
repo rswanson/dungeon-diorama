@@ -35,7 +35,8 @@ export function showDiceSidebar(scene: string): void {
   setOpen(window.matchMedia(OPEN_AT_START).matches);
 
   const send = async (): Promise<void> => {
-    const text = input.value;
+    // The text that the person typed stays in the input. The request has the trimmed text.
+    const text = input.value.trim();
     const parsed = parseInput(text);
     if (parsed.kind === "empty") return;
     if (parsed.kind === "error") {
