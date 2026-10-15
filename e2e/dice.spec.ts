@@ -14,6 +14,14 @@ function sidebar(page: Page) {
   };
 }
 
+/** True when the log shows its newest entry: it scrolls, and it is at the end. */
+function scrolledToEnd(page: Page) {
+  return page.locator(".dice-log").evaluate((el) => {
+    const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    return el.scrollHeight > el.clientHeight && end;
+  });
+}
+
 // Each test has a browser context of its own, so it is a new visitor.
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -47,14 +55,53 @@ test("/roll 2d6+1 adds an entry with each die, the modifier and the total", asyn
     await expect(entries).toHaveCount(n);
   }
   await expect(entries.last().locator(".dice-dice")).toHaveText("1d20-15");
-  const log = page.locator(".dice-log");
-  const { top, height, client } = await log.evaluate((el) => ({
-    top: el.scrollTop,
-    height: el.scrollHeight,
-    client: el.clientHeight,
-  }));
-  expect(height).toBeGreaterThan(client);
-  expect(top + client).toBeGreaterThanOrEqual(height - 1);
+  expect(await scrolledToEnd(page)).toBe(true);
+
+  // A reload shows the saved log, oldest at the top, scrolled to the newest
+  // entry. An entry sent while the log loads stays at the bottom, once.
+  let load: Route | undefined;
+  await page.route(ROLLS, (route) => {
+    if (route.request().method() === "GET") load = route;
+    else void route.continue();
+  });
+  await page.reload();
+  await ready(page);
+  await expect.poll(() => load).toBeDefined();
+  await input.fill("/roll 1d4");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+  await load!.continue();
+  await expect(entries).toHaveCount(16);
+  const saved = entries.first();
+  await expect(saved.locator(".dice-dice")).toHaveText("2d6+1");
+  await expect(saved.locator(".dice-line")).toHaveText(line!);
+  await expect(entries.nth(14).locator(".dice-dice")).toHaveText("1d20-15");
+  await expect(entries.last().locator(".dice-dice")).toHaveText("1d4");
+  await expect.poll(() => scrolledToEnd(page)).toBe(true);
+});
+
+test("when the saved rolls do not load, the log is empty, a notice shows, and a roll still works", async ({
+  page,
+}) => {
+  const { input, entries } = sidebar(page);
+  await input.fill("/roll 1d6");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+
+  await page.route(ROLLS, (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ status: 503, body: "" })
+      : route.continue(),
+  );
+  await page.reload();
+  await ready(page);
+  await expect(page.getByRole("status")).toHaveText("Saved rolls did not load");
+  await expect(entries).toHaveCount(0);
+
+  await input.fill("/roll 1d8");
+  await input.press("Enter");
+  await expect(entries).toHaveCount(1);
+  await expect(entries.first().locator(".dice-dice")).toHaveText("1d8");
 });
 
 test("an error shows under the input, keeps the text and logs nothing", async ({

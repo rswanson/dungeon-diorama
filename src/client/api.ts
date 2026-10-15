@@ -34,6 +34,22 @@ export async function loadPositions(scene: string): Promise<Layout> {
   return positions;
 }
 
+/**
+ * This visitor's newest 50 entries in `scene`, oldest first. It throws when
+ * they do not load.
+ */
+export async function loadRolls(scene: string): Promise<Entry[]> {
+  const res = await fetch(`/api/scenes/${encodeURIComponent(scene)}/rolls`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`The rolls answered ${res.status}.`);
+  const body = (await res.json()) as { rolls?: unknown };
+  if (!Array.isArray(body.rolls)) {
+    throw new Error("The rolls have a wrong shape.");
+  }
+  return body.rolls as Entry[];
+}
+
 /** Saves the move of sprite `id` in `scene` to `to`. It never throws. */
 export async function savePosition(
   scene: string,

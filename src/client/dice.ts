@@ -1,16 +1,22 @@
 import { parseInput, type Entry } from "../shared/dice.js";
 import { sendRoll } from "./api.js";
 import { localTime, rollLine, type LineSegment } from "./diceline.js";
+import { showNotice } from "./notice.js";
 
 /** The sidebar is open at the start on a window this wide or wider. */
 const OPEN_AT_START = "(min-width: 768px)";
 
 /**
  * Shows the dice sidebar (`.dice` in `index.html`) for `scene`: its log, its
- * error line and its input. Enter in the input sends the text, and the server
- * rolls and saves it. All text goes in the page as text, never as HTML.
+ * error line and its input. `saved` gives this visitor's saved entries, oldest
+ * first, or null when they did not load. Enter in the input sends the text,
+ * and the server rolls and saves it. All text goes in the page as text, never
+ * as HTML.
  */
-export function showDiceSidebar(scene: string): void {
+export function showDiceSidebar(
+  scene: string,
+  saved: Promise<Entry[] | null>,
+): void {
   const sidebar = document.querySelector<HTMLElement>(".dice");
   const toggle = sidebar?.querySelector<HTMLButtonElement>(".dice-toggle");
   const panel = sidebar?.querySelector<HTMLElement>(".dice-panel");
@@ -68,12 +74,29 @@ export function showDiceSidebar(scene: string): void {
   });
 
   sidebar.hidden = false;
+
+  // An entry sent before the log loads stays at the bottom: the saved entries
+  // go above it, less the ones that it already shows.
+  void saved.then((entries) => {
+    if (!entries) {
+      showNotice("Saved rolls did not load");
+      return;
+    }
+    const shown = new Set(
+      [...log.children].map((item) => (item as HTMLElement).dataset.id),
+    );
+    log.prepend(
+      ...entries.filter((entry) => !shown.has(String(entry.id))).map(entryItem),
+    );
+    log.scrollTop = log.scrollHeight;
+  });
 }
 
 /** The log item of an entry: the dice, its result line and the local time. */
 function entryItem(entry: Entry): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "dice-entry";
+  item.dataset.id = String(entry.id);
   const head = document.createElement("div");
   head.className = "dice-entry-head";
   const line = document.createElement("div");
