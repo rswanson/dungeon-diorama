@@ -141,10 +141,13 @@ body {
   padding: 6px 14px;
   font-size: 1rem;
   font-weight: 600;
-  white-space: pre-line;
   text-align: center;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.notice > span {
+  display: block;
 }
 
 .notice:empty {

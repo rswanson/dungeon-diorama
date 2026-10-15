@@ -3,9 +3,6 @@ const NOTICE_MS = 4000;
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-/** The texts that show now, one for each line. */
-let lines: string[] = [];
-
 /**
  * Shows a short parchment notice at the top of the page, for example "Move
  * not saved". It goes after `NOTICE_MS`. A new text goes under the texts that
@@ -16,11 +13,11 @@ let lines: string[] = [];
 export function showNotice(text: string): void {
   const notice = document.querySelector<HTMLElement>(".notice");
   if (!notice) return;
-  if (!lines.includes(text)) lines.push(text);
-  notice.textContent = lines.join("\n");
+  if (![...notice.children].some((line) => line.textContent === text)) {
+    const line = document.createElement("span");
+    line.textContent = text;
+    notice.append(line);
+  }
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    lines = [];
-    notice.textContent = "";
-  }, NOTICE_MS);
+  timer = setTimeout(() => notice.replaceChildren(), NOTICE_MS);
 }

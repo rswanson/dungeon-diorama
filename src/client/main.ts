@@ -256,18 +256,18 @@ async function main(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const name = params.get("scene") ?? "demo";
   // The positions and the dice log load at the same time as the scene file.
-  const saved = isSceneName(name)
-    ? loadPositions(name).catch((error: unknown) => {
-        console.warn("The saved moves did not load:", error);
-        return null;
-      })
-    : Promise.resolve(null);
-  const rolls = isSceneName(name)
-    ? loadRolls(name).catch((error: unknown) => {
-        console.warn("The saved rolls did not load:", error);
-        return null;
-      })
-    : Promise.resolve(null);
+  const loadOrNull = <T>(
+    load: (scene: string) => Promise<T>,
+    what: string,
+  ): Promise<T | null> =>
+    isSceneName(name)
+      ? load(name).catch((error: unknown) => {
+          console.warn(`The saved ${what} did not load:`, error);
+          return null;
+        })
+      : Promise.resolve(null);
+  const saved = loadOrNull(loadPositions, "moves");
+  const rolls = loadOrNull(loadRolls, "rolls");
   try {
     showBoard(name, await loadScene(name), saved, rolls);
   } catch (error) {
