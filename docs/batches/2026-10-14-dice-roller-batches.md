@@ -7,7 +7,7 @@ Each batch merges to `main` with CI green. Claude then deploys `main` through Ca
 
 ## B1: Dice sidebar and `/roll`
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** A `Dice` sidebar on the right of the page has a log and an input. `/roll 2d6+1` adds an entry with each die, the modifier and the total. The server rolls and saves each entry, but a reload shows an empty log until B2.
 - **Acceptance criteria:**
   1. `parseInput` in `src/shared/dice.ts` (unit tested) reads `/roll` with one dice term as the spec gives it: `[N]dS[±M]`, any case, spaces between the parts, `N` 1–100 (no `N` is 1), `S` 2–100, `M` up to 1000. It gives the normal form of `dice` (`2D6 + 0` gives `2d6`, `d20` gives `1d20`). The limit cases of the spec's unit tests are valid or errors as the spec gives them.
@@ -25,7 +25,7 @@ Each batch merges to `main` with CI green. Claude then deploys `main` through Ca
 
 ## B2: Saved roll log
 
-- **Status:** pending
+- **Status:** in-progress
 - **User-visible outcome:** A reload shows the newest 50 entries of this visitor for this scene. Another visitor, or another scene, has its own log.
 - **Acceptance criteria:**
   1. `GET /api/scenes/:scene/rolls` answers `200 {"rolls": [Entry, ...]}`: the newest 50 entries of this visitor for this scene, oldest first, and an empty list for a new visitor. It answers `404` for an unknown scene.
