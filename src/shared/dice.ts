@@ -38,14 +38,14 @@ export interface Entry {
   parts: Part[];
 }
 
-/** A part of a note before the roll: text, or the dice term of a `[[...]]`. */
-export type NotePart = { text: string } | { term: DiceTerm };
+/** A part of a parsed input before the roll: text, or a dice term. */
+export type ParsedPart = { text: string } | { term: DiceTerm };
 
 /** What `parseInput` gives. A `/roll` gives one part: its dice term. */
 export type ParsedInput =
   | { kind: "empty" }
   | { kind: "error"; error: string }
-  | { kind: "roll" | "note"; parts: NotePart[] };
+  | { kind: "roll" | "note"; parts: ParsedPart[] };
 
 /** `[N]dS[±M]`, with spaces between the parts but not inside a number. */
 const TERM = /^(\d+)?\s*d\s*(\d+)\s*(?:([+-])\s*(\d+))?$/i;
@@ -115,7 +115,7 @@ export function parseInput(input: string): ParsedInput {
  * missing, it names the text from the `[[` to the `]]` or to the end.
  */
 function parseNote(text: string): ParsedInput {
-  const parts: NotePart[] = [];
+  const parts: ParsedPart[] = [];
   const addText = (part: string) => {
     if (part !== "") parts.push({ text: part });
   };
