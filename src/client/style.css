@@ -205,7 +205,7 @@ body {
  * sidebar. On a narrower window, the board keeps the full window, and the
  * sidebar covers it.
  */
-@media (min-width: 456px) {
+@media (width >= 456px) {
   .dice-open #scene {
     width: calc(100% - var(--dice-width));
   }
@@ -222,7 +222,7 @@ body {
  * 320 + 16 + 104 + 16 = 456px. On a window narrower than 456px, the sidebar
  * hides them.
  */
-@media (max-width: 455px) {
+@media (width < 456px) {
   .dice-open .hud {
     display: none;
   }
@@ -235,7 +235,7 @@ body {
 }
 
 /* On a window this narrow, the sidebar covers most of the window. */
-@media (max-width: 455px) {
+@media (width < 456px) {
   .dice-open .notice {
     left: 50%;
     max-width: calc(100% - 32px);
