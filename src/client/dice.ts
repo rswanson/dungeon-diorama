@@ -88,9 +88,18 @@ export function showDiceSidebar(
     const shown = new Set(
       [...log.children].map((item) => (item as HTMLElement).dataset.id),
     );
-    log.prepend(
-      ...entries.filter((entry) => !shown.has(String(entry.id))).map(entryItem),
-    );
+    let items: HTMLLIElement[];
+    try {
+      items = entries
+        .filter((entry) => !shown.has(String(entry.id)))
+        .map(entryItem);
+    } catch (error) {
+      // A bad entry counts as a failed load. The log stays as it was.
+      console.warn("The saved rolls have a wrong shape:", error);
+      showNotice("Saved rolls did not load");
+      return;
+    }
+    log.prepend(...items);
     log.scrollTop = log.scrollHeight;
   });
 }
