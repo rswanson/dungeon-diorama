@@ -10,6 +10,31 @@
   <body>
     <h1 class="title">Dungeon Diorama</h1>
     <canvas id="scene" aria-label="Game board"></canvas>
+    <aside class="dice" hidden>
+      <h2 class="dice-heading">
+        <button
+          type="button"
+          class="dice-toggle"
+          aria-expanded="false"
+          aria-controls="dice-panel"
+        >
+          Dice
+        </button>
+      </h2>
+      <div class="dice-panel" id="dice-panel" hidden>
+        <ol class="dice-log" aria-label="Dice log" aria-live="polite"></ol>
+        <p class="dice-error" role="alert"></p>
+        <input
+          class="dice-input"
+          type="text"
+          aria-label="Dice roll"
+          placeholder="/roll 1d20+5 or text with [[1d6]]"
+          autocomplete="off"
+          spellcheck="false"
+          enterkeyhint="send"
+        />
+      </div>
+    </aside>
     <p class="notice" role="status"></p>
     <div class="hud" hidden>
       <button

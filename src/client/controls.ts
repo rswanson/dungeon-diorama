@@ -1,4 +1,5 @@
 import type { BoardCamera } from "./camera.js";
+import { inTextField } from "./keys.js";
 import type { Point } from "./point.js";
 
 /** The zoom change for one pixel of mouse wheel. */
@@ -149,7 +150,7 @@ export function attachCameraControls(
   };
 
   window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || inTextField(e)) return;
     const dir = TURN_KEYS.get(e.key.toLowerCase());
     if (!dir) return;
     e.preventDefault();

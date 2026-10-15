@@ -1,6 +1,8 @@
+import { randomInt } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type pg from "pg";
+import { parseInput, rollTerm, type Entry } from "../shared/dice.js";
 import type { At, Layout } from "../shared/positions.js";
 import { isAt, onBoard } from "../shared/scene.js";
 import { message, withTransaction } from "./db.js";
@@ -21,6 +23,9 @@ const MOVE_LOCK = 7_331_002;
 /** The body of a move is `{"at": [x, z]}`, so a body of more than this many bytes is an error (413). */
 const MAX_MOVE_BYTES = 1024;
 
+/** The body of a roll is `{"text": "..."}` with at most 500 characters, so a body of more than this many bytes is an error (413). */
+const MAX_ROLL_BYTES = 4096;
+
 /**
  * Reads the body of a move: `{"at": [x, z]}` with two whole numbers. It gives
  * null for any other body.
@@ -29,6 +34,24 @@ export function parseMove(body: unknown): At | null {
   if (typeof body !== "object" || body === null) return null;
   const at = (body as { at?: unknown }).at;
   return isAt(at) ? [at[0], at[1]] : null;
+}
+
+/**
+ * Reads the body of a roll: `{"text": "..."}`. It gives the text, or null for
+ * any other body.
+ */
+function parseRollBody(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const text = (body as { text?: unknown }).text;
+  return typeof text === "string" ? text : null;
+}
+
+/** The middleware that answers 413 for a body of more than `maxSize` bytes. */
+function jsonLimit(maxSize: number) {
+  return bodyLimit({
+    maxSize,
+    onError: (c) => c.json({ error: "The body is too large." }, 413),
+  });
 }
 
 /** The JSON API, at `/api`. */
@@ -54,10 +77,7 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
 
   api.put(
     "/scenes/:scene/sprites/:spriteId/position",
-    bodyLimit({
-      maxSize: MAX_MOVE_BYTES,
-      onError: (c) => c.json({ error: "The body is too large." }, 413),
-    }),
+    jsonLimit(MAX_MOVE_BYTES),
     async (c) => {
       const name = c.req.param("scene");
       const spriteId = c.req.param("spriteId");
@@ -129,6 +149,41 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
       return c.json({ at });
     },
   );
+
+  api.post("/scenes/:scene/rolls", jsonLimit(MAX_ROLL_BYTES), async (c) => {
+    const name = c.req.param("scene");
+    if (!(await scenes.get(name))) {
+      return notFound(c, "The scene does not exist.");
+    }
+    const text = parseRollBody(await c.req.json().catch(() => null));
+    if (text === null) {
+      return c.json({ error: 'The body must be {"text": "..."}.' }, 400);
+    }
+    const parsed = parseInput(text);
+    if (parsed.kind === "empty") {
+      return c.json({ error: "The text is empty." }, 400);
+    }
+    if (parsed.kind === "error") return c.json({ error: parsed.error }, 400);
+
+    // The roll exists only once its row saves: a failed insert gives 500.
+    const parts = [
+      { roll: rollTerm(parsed.term, (sides) => randomInt(1, sides + 1)) },
+    ];
+    const { rows } = await db.query<{ id: string; rolled_at: Date }>(
+      `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
+         VALUES ($1, $2, 'roll', $3)
+         RETURNING id, rolled_at`,
+      [c.get("visitor"), name, JSON.stringify(parts)],
+    );
+    const entry: Entry = {
+      // A bigserial comes back as text.
+      id: Number(rows[0].id),
+      kind: "roll",
+      at: rows[0].rolled_at.toISOString(),
+      parts,
+    };
+    return c.json({ roll: entry }, 201);
+  });
 
   return api;
 }

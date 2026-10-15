@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Hono } from "hono";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Entry, Roll } from "../shared/dice.js";
 import { createApp } from "./app.js";
 import { createPool, migrate } from "./db.js";
 import { LAYOUT, SCENE } from "./test-fixtures.js";
@@ -23,7 +24,7 @@ if (!url) {
   );
 }
 
-describe.skipIf(!url)("the positions API on Postgres", () => {
+describe.skipIf(!url)("the API on Postgres", () => {
   const schema = `test_${randomUUID().replaceAll("-", "")}`;
   const scenesDir = mkdtempSync(join(tmpdir(), "dd-api-"));
   writeFileSync(join(scenesDir, "test.json"), JSON.stringify(SCENE));
@@ -85,6 +86,25 @@ describe.skipIf(!url)("the positions API on Postgres", () => {
       },
     ]);
     expect(await migrate(db)).toEqual([]);
+  });
+
+  it("creates dice_rolls and its index as the spec gives them", async () => {
+    const index = await db.query(
+      `SELECT indexdef FROM pg_indexes
+        WHERE schemaname = $1 AND indexname = 'dice_rolls_visitor_scene'`,
+      [schema],
+    );
+    expect(index.rows[0].indexdef).toContain(
+      "USING btree (visitor_id, scene, id DESC)",
+    );
+    // The CHECK refuses another kind.
+    await expect(
+      db.query(
+        `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
+         VALUES ($1, 'test', 'other', '[]')`,
+        [randomUUID()],
+      ),
+    ).rejects.toThrow(/check constraint/);
   });
 
   it("gives a new visitor a cookie and the scene file positions", async () => {
@@ -223,6 +243,107 @@ describe.skipIf(!url)("the positions API on Postgres", () => {
     expect(await (await positions(me)).json()).toEqual({
       positions: { a: [1, 1], b: [0, 2], c: [2, 2] },
     });
+  });
+
+  function roll(
+    cookie: string,
+    body: unknown,
+    scene = "test",
+    target: Hono = app,
+  ) {
+    return target.request(`/api/scenes/${scene}/rolls`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  }
+
+  it("rolls /roll 2d6+1, saves it for this visitor and scene, and gives the entry", async () => {
+    const me = visitor();
+    const res = await roll(me, { text: "/roll 2D6 + 1" });
+    expect(res.status).toBe(201);
+    const { roll: entry } = (await res.json()) as { roll: Entry };
+    expect(entry).toMatchObject({
+      kind: "roll",
+      parts: [{ roll: { dice: "2d6+1", count: 2, sides: 6, modifier: 1 } }],
+    });
+    const { results, total } = (entry.parts[0] as { roll: Roll }).roll;
+    expect(results).toHaveLength(2);
+    expect(
+      results.every((die) => Number.isInteger(die) && die >= 1 && die <= 6),
+      String(results),
+    ).toBe(true);
+    expect(total).toBe(results[0] + results[1] + 1);
+    expect(Number.isInteger(entry.id)).toBe(true);
+    expect(new Date(entry.at).toISOString()).toBe(entry.at);
+
+    const { rows } = await db.query(
+      `SELECT id, kind, parts, rolled_at FROM dice_rolls
+        WHERE visitor_id = $1 AND scene = 'test'`,
+      [me.slice(VISITOR_COOKIE.length + 1)],
+    );
+    expect(rows).toEqual([
+      {
+        id: String(entry.id),
+        kind: "roll",
+        parts: entry.parts,
+        rolled_at: new Date(entry.at),
+      },
+    ]);
+  });
+
+  it("answers 400 for bad dice, an unknown command, empty text or a body with no text, and saves nothing", async () => {
+    const me = visitor();
+    const cases: [unknown, string][] = [
+      [
+        { text: "/roll 2d0" },
+        "`2d0` is not valid dice. Use NdS±M, for example /roll 1d20+5.",
+      ],
+      [{ text: "/dance" }, "Unknown command. Use /roll 1d20+5."],
+      [{ text: "  " }, "The text is empty."],
+      [{}, 'The body must be {"text": "..."}.'],
+      [{ text: 5 }, 'The body must be {"text": "..."}.'],
+      ["not json", 'The body must be {"text": "..."}.'],
+    ];
+    for (const [body, error] of cases) {
+      const res = await roll(me, body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(await res.json()).toEqual({ error });
+    }
+    const { rows } = await db.query(
+      "SELECT 1 FROM dice_rolls WHERE visitor_id = $1",
+      [me.slice(VISITOR_COOKIE.length + 1)],
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("answers 404 for an unknown scene and 413 for a body of more than 4 KB", async () => {
+    const me = visitor();
+    const missing = await roll(me, { text: "/roll 1d6" }, "nowhere");
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({
+      error: "The scene does not exist.",
+    });
+    const big = await roll(me, { text: "/roll 1d6", pad: "x".repeat(4096) });
+    expect(big.status).toBe(413);
+    expect(await big.json()).toEqual({ error: "The body is too large." });
+  });
+
+  it("answers 500 and gives no entry when the save fails", async () => {
+    // A schema with no tables: the insert fails.
+    const broken = createPool(url!, `-c search_path=${schema}_missing`);
+    try {
+      const res = await roll(
+        visitor(),
+        { text: "/roll 1d6" },
+        "test",
+        createApp({ db: broken, scenesDir }),
+      );
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: "The server failed." });
+    } finally {
+      await broken.end();
+    }
   });
 
   it("gives one 409 for two moves at once onto one square", async () => {
