@@ -135,9 +135,10 @@ test("on a narrow window, the log shows its newest entry when the sidebar opens"
   await ready(page);
   // The sidebar is closed at the start, so the log cannot scroll yet.
   await expect(panel).toBeHidden();
+  // The entries load while the panel is hidden, so the open itself must scroll.
+  await expect(entries).toHaveCount(20);
   await toggle.click();
   await expect(panel).toBeVisible();
-  await expect(entries).toHaveCount(20);
   expect(await scrolledToEnd(page)).toBe(true);
 });
 
