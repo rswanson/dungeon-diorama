@@ -40,8 +40,8 @@ interface Frustum {
 }
 
 /**
- * The frustum for a window with this aspect (width / height). It fills the
- * window, holds all of `content` with a margin, and keeps its center on the
+ * The frustum for a board area with this aspect (width / height). It fills the
+ * area, holds all of `content` with a margin, and keeps its center on the
  * camera's target.
  */
 export function frustum(
@@ -127,7 +127,7 @@ export class BoardCamera {
     return this.extent;
   }
 
-  /** Sets the view for a window of this size, in CSS pixels. It keeps the target and the zoom. */
+  /** Sets the view for a board area (the canvas) of this size, in CSS pixels. It keeps the target and the zoom. */
   resize(width: number, height: number): void {
     this.extent.width = Math.max(width, 1);
     this.extent.height = Math.max(height, 1);
