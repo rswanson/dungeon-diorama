@@ -144,14 +144,23 @@ function showBoard(
   scene.add(sun, sun.target);
 
   let size = "";
-  function draw(): void {
-    // The canvas is the board area: the window, or the part left of the open
-    // dice sidebar (style.css).
+  // The canvas is the board area: the window, or the part left of the open
+  // dice sidebar (style.css). Browser zoom or a move to another display
+  // changes the pixel ratio.
+  function sizeKey(): {
+    key: string;
+    width: number;
+    height: number;
+    ratio: number;
+  } {
     const width = renderer.domElement.clientWidth;
     const height = renderer.domElement.clientHeight;
-    // Browser zoom or a move to another display changes the ratio.
     const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
-    const key = `${width}x${height}@${ratio}`;
+    return { key: `${width}x${height}@${ratio}`, width, height, ratio };
+  }
+
+  function draw(): void {
+    const { key, width, height, ratio } = sizeKey();
     if (key !== size) {
       size = key;
       if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
@@ -200,12 +209,15 @@ function showBoard(
     },
   });
 
-  // A window resize and an open or a close of the dice sidebar change the
-  // size of the canvas. A window resize can also change the pixel ratio. The
-  // observer draws at once, before the browser paints, so no frame shows the
-  // old buffer stretched into the new box. A draw that `requestDraw` queued
-  // earlier draws the same view again, which does no harm.
-  new ResizeObserver(() => draw()).observe(canvas);
+  // The observer draws at once when the canvas box changes (the dice sidebar
+  // opens or closes), before the browser paints, so no stale frame shows the
+  // old buffer stretched into the new box. A draw that already used this size
+  // (the one that `requestDraw` queued for a window resize) is not repeated.
+  new ResizeObserver(() => {
+    if (sizeKey().key !== size) draw();
+  }).observe(canvas);
+  // A change of the pixel ratio (browser zoom, a move to another display) may
+  // not change the CSS size of the canvas, so the observer does not see it.
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
