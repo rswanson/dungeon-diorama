@@ -29,10 +29,7 @@ export class BoardLabel {
   constructor({
     className,
     parent = document.body,
-  }: {
-    className?: string;
-    parent?: HTMLElement;
-  } = {}) {
+  }: { className?: string; parent?: HTMLElement } = {}) {
     this.element = document.createElement("div");
     this.element.className = className
       ? `board-label ${className}`
