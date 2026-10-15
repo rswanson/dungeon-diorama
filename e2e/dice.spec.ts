@@ -102,6 +102,21 @@ test("when the saved rolls do not load, the log is empty, a notice shows, and a 
   await input.press("Enter");
   await expect(entries).toHaveCount(1);
   await expect(entries.first().locator(".dice-dice")).toHaveText("1d8");
+
+  // When the saved moves do not load too, the notice holds both texts, once each.
+  await page.route("**/api/scenes/*/positions", (route) =>
+    route.fulfill({ status: 503, body: "" }),
+  );
+  await page.reload();
+  await ready(page);
+  const notice = page.getByRole("status");
+  await expect(notice).toContainText("Saved moves did not load");
+  await expect(notice).toContainText("Saved rolls did not load");
+  const lines = ((await notice.textContent()) ?? "").split("\n").sort();
+  expect(lines).toEqual([
+    "Saved moves did not load",
+    "Saved rolls did not load",
+  ]);
 });
 
 test("on a narrow window, the log shows its newest entry when the sidebar opens", async ({
