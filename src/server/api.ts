@@ -36,6 +36,24 @@ export function parseMove(body: unknown): At | null {
   return isAt(at) ? [at[0], at[1]] : null;
 }
 
+/**
+ * Reads the body of a roll: `{"text": "..."}`. It gives the text, or null for
+ * any other body.
+ */
+export function parseRollBody(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const text = (body as { text?: unknown }).text;
+  return typeof text === "string" ? text : null;
+}
+
+/** The middleware that answers 413 for a body of more than `maxSize` bytes. */
+function jsonLimit(maxSize: number) {
+  return bodyLimit({
+    maxSize,
+    onError: (c) => c.json({ error: "The body is too large." }, 413),
+  });
+}
+
 /** The JSON API, at `/api`. */
 export function createApi({ db, scenes, secureCookie }: ApiOptions) {
   const api = new Hono<VisitorEnv>();
@@ -59,10 +77,7 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
 
   api.put(
     "/scenes/:scene/sprites/:spriteId/position",
-    bodyLimit({
-      maxSize: MAX_MOVE_BYTES,
-      onError: (c) => c.json({ error: "The body is too large." }, 413),
-    }),
+    jsonLimit(MAX_MOVE_BYTES),
     async (c) => {
       const name = c.req.param("scene");
       const spriteId = c.req.param("spriteId");
@@ -135,51 +150,40 @@ export function createApi({ db, scenes, secureCookie }: ApiOptions) {
     },
   );
 
-  api.post(
-    "/scenes/:scene/rolls",
-    bodyLimit({
-      maxSize: MAX_ROLL_BYTES,
-      onError: (c) => c.json({ error: "The body is too large." }, 413),
-    }),
-    async (c) => {
-      const name = c.req.param("scene");
-      if (!(await scenes.get(name))) {
-        return notFound(c, "The scene does not exist.");
-      }
-      const body: unknown = await c.req.json().catch(() => null);
-      const text =
-        typeof body === "object" && body !== null
-          ? (body as { text?: unknown }).text
-          : undefined;
-      if (typeof text !== "string") {
-        return c.json({ error: 'The body must be {"text": "..."}.' }, 400);
-      }
-      const parsed = parseInput(text);
-      if (parsed.kind === "empty") {
-        return c.json({ error: "The text is empty." }, 400);
-      }
-      if (parsed.kind === "error") return c.json({ error: parsed.error }, 400);
+  api.post("/scenes/:scene/rolls", jsonLimit(MAX_ROLL_BYTES), async (c) => {
+    const name = c.req.param("scene");
+    if (!(await scenes.get(name))) {
+      return notFound(c, "The scene does not exist.");
+    }
+    const text = parseRollBody(await c.req.json().catch(() => null));
+    if (text === null) {
+      return c.json({ error: 'The body must be {"text": "..."}.' }, 400);
+    }
+    const parsed = parseInput(text);
+    if (parsed.kind === "empty") {
+      return c.json({ error: "The text is empty." }, 400);
+    }
+    if (parsed.kind === "error") return c.json({ error: parsed.error }, 400);
 
-      // The roll exists only once its row saves: a failed insert gives 500.
-      const parts = [
-        { roll: rollTerm(parsed.term, (sides) => randomInt(1, sides + 1)) },
-      ];
-      const { rows } = await db.query<{ id: string; rolled_at: Date }>(
-        `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
+    // The roll exists only once its row saves: a failed insert gives 500.
+    const parts = [
+      { roll: rollTerm(parsed.term, (sides) => randomInt(1, sides + 1)) },
+    ];
+    const { rows } = await db.query<{ id: string; rolled_at: Date }>(
+      `INSERT INTO dice_rolls (visitor_id, scene, kind, parts)
          VALUES ($1, $2, 'roll', $3)
          RETURNING id, rolled_at`,
-        [c.get("visitor"), name, JSON.stringify(parts)],
-      );
-      const entry: Entry = {
-        // A bigserial comes back as text.
-        id: Number(rows[0].id),
-        kind: "roll",
-        at: rows[0].rolled_at.toISOString(),
-        parts,
-      };
-      return c.json({ roll: entry }, 201);
-    },
-  );
+      [c.get("visitor"), name, JSON.stringify(parts)],
+    );
+    const entry: Entry = {
+      // A bigserial comes back as text.
+      id: Number(rows[0].id),
+      kind: "roll",
+      at: rows[0].rolled_at.toISOString(),
+      parts,
+    };
+    return c.json({ roll: entry }, 201);
+  });
 
   return api;
 }

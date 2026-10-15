@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Hono } from "hono";
 import type pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Entry, Roll } from "../shared/dice.js";
 import { createApp } from "./app.js";
 import { createPool, migrate } from "./db.js";
 import { LAYOUT, SCENE } from "./test-fixtures.js";
@@ -244,8 +245,13 @@ describe.skipIf(!url)("the API on Postgres", () => {
     });
   });
 
-  function roll(cookie: string, body: unknown, scene = "test") {
-    return app.request(`/api/scenes/${scene}/rolls`, {
+  function roll(
+    cookie: string,
+    body: unknown,
+    scene = "test",
+    target: Hono = app,
+  ) {
+    return target.request(`/api/scenes/${scene}/rolls`, {
       method: "POST",
       headers: { Cookie: cookie, "Content-Type": "application/json" },
       body: typeof body === "string" ? body : JSON.stringify(body),
@@ -256,26 +262,17 @@ describe.skipIf(!url)("the API on Postgres", () => {
     const me = visitor();
     const res = await roll(me, { text: "/roll 2D6 + 1" });
     expect(res.status).toBe(201);
-    const { roll: entry } = (await res.json()) as {
-      roll: {
-        id: number;
-        kind: string;
-        at: string;
-        parts: { roll: { results: number[]; total: number } }[];
-      };
-    };
+    const { roll: entry } = (await res.json()) as { roll: Entry };
     expect(entry).toMatchObject({
       kind: "roll",
       parts: [{ roll: { dice: "2d6+1", count: 2, sides: 6, modifier: 1 } }],
     });
-    expect(entry.parts).toHaveLength(1);
-    const { results, total } = entry.parts[0].roll;
+    const { results, total } = (entry.parts[0] as { roll: Roll }).roll;
     expect(results).toHaveLength(2);
-    for (const die of results) {
-      expect(Number.isInteger(die) && die >= 1 && die <= 6, String(die)).toBe(
-        true,
-      );
-    }
+    expect(
+      results.every((die) => Number.isInteger(die) && die >= 1 && die <= 6),
+      String(results),
+    ).toBe(true);
     expect(total).toBe(results[0] + results[1] + 1);
     expect(Number.isInteger(entry.id)).toBe(true);
     expect(new Date(entry.at).toISOString()).toBe(entry.at);
@@ -336,13 +333,11 @@ describe.skipIf(!url)("the API on Postgres", () => {
     // A schema with no tables: the insert fails.
     const broken = createPool(url!, `-c search_path=${schema}_missing`);
     try {
-      const res = await createApp({ db: broken, scenesDir }).request(
-        "/api/scenes/test/rolls",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: "/roll 1d6" }),
-        },
+      const res = await roll(
+        visitor(),
+        { text: "/roll 1d6" },
+        "test",
+        createApp({ db: broken, scenesDir }),
       );
       expect(res.status).toBe(500);
       expect(await res.json()).toEqual({ error: "The server failed." });
