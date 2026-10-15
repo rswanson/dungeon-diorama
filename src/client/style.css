@@ -176,6 +176,8 @@ body {
   z-index: 2;
   display: flex;
   flex-direction: column;
+  /* The log scrolls, and a pinch does not zoom the page. */
+  touch-action: pan-y;
 }
 
 .dice[hidden],
@@ -207,6 +209,20 @@ body {
 @media (max-width: 455px) {
   .dice-open .hud {
     display: none;
+  }
+}
+
+/* The notice is centered in the board area, left of the open sidebar. */
+.dice-open .notice {
+  left: calc((100% - var(--dice-width)) / 2);
+  max-width: calc(100% - var(--dice-width) - 32px);
+}
+
+/* On a window this narrow, the sidebar covers most of the window. */
+@media (max-width: 455px) {
+  .dice-open .notice {
+    left: 50%;
+    max-width: calc(100% - 32px);
   }
 }
 

@@ -78,9 +78,11 @@ test("an error shows under the input, keeps the text and logs nothing", async ({
   expect(sends).toHaveLength(0);
 
   // A 400 shows the server's message.
-  await input.fill("/roll 1d6");
+  await input.fill("   /roll 1d6   ");
   await input.press("Enter");
   await expect.poll(() => sends.length).toBe(1);
+  // The request has the trimmed text. The input keeps the text as typed.
+  expect(sends[0].request().postDataJSON()).toEqual({ text: "/roll 1d6" });
   await sends[0].fulfill({ status: 400, json: { error: "From the server." } });
   await expect(error).toHaveText("From the server.");
 
@@ -103,7 +105,7 @@ test("an error shows under the input, keeps the text and logs nothing", async ({
   await sends[2].abort("internetdisconnected");
   await expect(error).toHaveText("Roll not saved. Try again.");
 
-  await expect(input).toHaveValue("/roll 1d6");
+  await expect(input).toHaveValue("   /roll 1d6   ");
   await expect(entries).toHaveCount(0);
 });
 
@@ -154,6 +156,19 @@ test("the Dice button opens and closes the sidebar, which does not cover the tur
   const narrow = await turn.boundingBox();
   expect(narrow!.x).toBeGreaterThanOrEqual(0);
   expect(narrow!.x + narrow!.width).toBeLessThanOrEqual(375);
+
+  // On a window from 768px, the notice does not cover the open sidebar.
+  await page.setViewportSize({ width: 800, height: 800 });
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const notice = page.locator(".notice");
+  await notice.evaluate((el) => {
+    el.textContent = "Move not saved. Try again.";
+  });
+  const noticeBox = await notice.boundingBox();
+  const sidebarBox = await page.locator(".dice").boundingBox();
+  expect(noticeBox!.x).toBeGreaterThanOrEqual(0);
+  expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(sidebarBox!.x);
 });
 
 test("a press on the sidebar does not pan, and Q, E and Esc in the input are text", async ({
