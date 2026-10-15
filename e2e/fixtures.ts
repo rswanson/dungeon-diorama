@@ -64,11 +64,13 @@ export async function ready(page: Page): Promise<void> {
 export function boardArea(page: Page) {
   return page.locator("#scene").evaluate((canvas) => {
     const { x, y, width, height } = canvas.getBoundingClientRect();
-    // The renderer sets the width attribute: the drawn width times the pixel ratio.
+    // The renderer sets the width attribute: the drawn width times the pixel
+    // ratio. The renderer caps the ratio at 2 (`MAX_PIXEL_RATIO` in `main.ts`).
     const { devicePixelRatio } = globalThis as unknown as {
       devicePixelRatio: number;
     };
-    const drawn = Number(canvas.getAttribute("width")) / devicePixelRatio;
+    const drawn =
+      Number(canvas.getAttribute("width")) / Math.min(devicePixelRatio, 2);
     return { x, y, width, height, drawn };
   });
 }
