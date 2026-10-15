@@ -166,6 +166,19 @@ test("the Dice button opens and closes the sidebar, which does not cover the tur
   expect(await page.locator(".dice").boundingBox()).toMatchObject({
     width: 320,
   });
+  await expect(turn).toBeVisible();
+
+  // On a window too narrow for the turn buttons to fit left of the open sidebar,
+  // the sidebar hides them. They show again when it closes.
+  await page.setViewportSize({ width: 375, height: 800 });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(turn).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(turn).toBeVisible();
+  const narrow = await turn.boundingBox();
+  expect(narrow!.x).toBeGreaterThanOrEqual(0);
+  expect(narrow!.x + narrow!.width).toBeLessThanOrEqual(375);
 });
 
 test("a press on the sidebar does not pan, and Q, E and Esc in the input are text", async ({
@@ -187,10 +200,23 @@ test("a press on the sidebar does not pan, and Q, E and Esc in the input are tex
   await drag([300, 600], [200, 660]);
   expect(await squareScreen(page, 0, 0)).not.toEqual(before);
 
+  // Q and E in the input are text: the camera does not turn. A turn lasts about
+  // 250 ms, so wait longer than that before the check.
+  const panned = await squareScreen(page, 0, 0);
   await input.click();
   await page.keyboard.type("qQ eE");
   await page.keyboard.press("Escape");
   await expect(input).toHaveValue("qQ eE");
+  await page.waitForTimeout(500);
+  expect(await squareScreen(page, 0, 0)).toEqual(panned);
+  // Outside the input, Q turns the camera as before. E turns it back.
+  await input.blur();
+  await page.keyboard.press("q");
+  await page.waitForTimeout(500);
+  expect(await squareScreen(page, 0, 0)).not.toEqual(panned);
+  await page.keyboard.press("e");
+  await page.waitForTimeout(500);
+  expect(await squareScreen(page, 0, 0)).toEqual(panned);
 
   // Esc in the input does not cancel a drag.
   const fighter = await page.evaluate(() =>
