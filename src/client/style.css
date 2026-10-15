@@ -82,10 +82,15 @@ body {
   outline-offset: 3px;
 }
 
-/* The parchment of the error panel, the notice and the board labels. */
+/*
+ * The parchment of the error panel, the notice, the board labels, the open dice
+ * sidebar and its Dice button.
+ */
 .error-panel,
 .notice,
-.board-label {
+.board-label,
+.dice.open,
+.dice-toggle {
   border: 3px double var(--ink);
   border-radius: 4px;
   background: var(--parchment);
@@ -171,9 +176,6 @@ body {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  color: var(--ink);
-  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  line-height: 1.4;
 }
 
 .dice[hidden],
@@ -188,9 +190,6 @@ body {
   box-sizing: border-box;
   width: var(--dice-width);
   padding: 12px;
-  border: 3px double var(--ink);
-  border-radius: 4px;
-  background: var(--parchment);
   box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
 }
 
@@ -219,12 +218,7 @@ body {
   min-width: 48px;
   height: 48px;
   padding: 0 14px;
-  border: 3px double var(--ink);
-  border-radius: 4px;
-  background: var(--parchment);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
-  color: var(--ink);
-  font: inherit;
+  font-size: inherit;
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
