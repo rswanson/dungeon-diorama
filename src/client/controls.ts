@@ -1,4 +1,5 @@
 import type { BoardCamera } from "./camera.js";
+import { inTextField } from "./keys.js";
 import type { Point } from "./point.js";
 
 /** The zoom change for one pixel of mouse wheel. */
@@ -164,17 +165,6 @@ export function attachCameraControls(
     },
     turn,
   };
-}
-
-/**
- * True for a key in a text field, for example the dice input. There, Q, E
- * and Esc are text keys, so the board does not act on them.
- */
-export function inTextField(e: KeyboardEvent): boolean {
-  return (
-    e.target instanceof HTMLInputElement ||
-    e.target instanceof HTMLTextAreaElement
-  );
 }
 
 /**

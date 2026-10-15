@@ -1,4 +1,5 @@
-import { canvasPoint, inTextField, type CameraControls } from "./controls.js";
+import { canvasPoint, type CameraControls } from "./controls.js";
+import { inTextField } from "./keys.js";
 import type { Point } from "./point.js";
 import { PressTracker, type PressEvent } from "./press.js";
 
