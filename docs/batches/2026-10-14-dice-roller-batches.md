@@ -38,7 +38,7 @@ Each batch merges to `main` with CI green. Claude then deploys `main` through Ca
 
 ## B3: Notes and `[[...]]` rolls
 
-- **Status:** in-progress
+- **Status:** merged
 - **User-visible outcome:** Text with no command goes in the log as a note. Each `[[...]]` in the text rolls, shows its total in bold, and a hover or a tap on the total shows its dice.
 - **Acceptance criteria:**
   1. `parseInput` (unit tested) gives a `note` with its parts in the order of the text for any text that does not start with `/`. Each `[[...]]` is a roll part. A `]]` with no `[[` before it is plain text. A note with no `[[...]]` has one `text` part.
