@@ -131,6 +131,7 @@ test("a press on a total shows its dice until a second press, with the green and
   const details = fixed.locator(".dice-detail");
   await totals.nth(0).click();
   await page.mouse.move(10, 10);
+  await expect(details.nth(0)).toBeVisible();
   await expect(details.nth(0)).toHaveText("1d20+5: (20) + 5 = 25");
   await expect(details.nth(0).locator(".die-max")).toHaveText("20");
   await expect(totals.nth(0)).toHaveAttribute("aria-expanded", "true");
@@ -138,6 +139,8 @@ test("a press on a total shows its dice until a second press, with the green and
   await page.mouse.move(10, 10);
   await expect(details.nth(0)).toBeHidden();
   await totals.nth(1).click();
+  await page.mouse.move(10, 10);
+  await expect(details.nth(1)).toBeVisible();
   await expect(details.nth(1)).toHaveText("1d8+3: (1) + 3 = 4");
   await expect(details.nth(1).locator(".die-min")).toHaveText("1");
 });
