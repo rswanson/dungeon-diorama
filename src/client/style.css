@@ -4,6 +4,8 @@
   --parchment: #e8dcc0;
   --parchment-light: #f3ead4;
   --ink: #3a2a1c;
+  /* The width of the open dice sidebar. */
+  --dice-width: min(320px, 100vw);
 }
 
 html,
@@ -156,4 +158,146 @@ body {
 
 .board-label[hidden] {
   display: none;
+}
+
+/* The dice sidebar. When it is closed, only its Dice button shows. */
+.dice {
+  --die-max: #2d6a1f;
+  --die-min: #a3261c;
+
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  line-height: 1.4;
+}
+
+.dice[hidden],
+.dice-panel[hidden] {
+  display: none;
+}
+
+.dice.open {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: var(--dice-width);
+  padding: 12px;
+  border: 3px double var(--ink);
+  border-radius: 4px;
+  background: var(--parchment);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
+}
+
+/* The turn buttons stay left of the open sidebar. */
+.dice-open .hud {
+  right: calc(var(--dice-width) + max(16px, env(safe-area-inset-right)));
+}
+
+.dice-heading {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.dice-toggle {
+  min-width: 48px;
+  height: 48px;
+  padding: 0 14px;
+  border: 3px double var(--ink);
+  border-radius: 4px;
+  background: var(--parchment);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 50%);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dice.open .dice-toggle {
+  box-shadow: none;
+}
+
+.dice-toggle:hover {
+  background: var(--parchment-light);
+}
+
+.dice-toggle:focus-visible,
+.dice-input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.dice-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.dice-log {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.dice-entry {
+  padding: 6px 2px;
+  border-bottom: 1px solid rgb(58 42 28 / 25%);
+}
+
+.dice-entry-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.dice-entry-head time {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.die-max {
+  color: var(--die-max);
+  font-weight: 600;
+}
+
+.die-min {
+  color: var(--die-min);
+  font-weight: 600;
+}
+
+.dice-error {
+  margin: 8px 0 0;
+  color: var(--die-min);
+  font-weight: 600;
+}
+
+.dice-error:empty {
+  display: none;
+}
+
+.dice-input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--parchment-light);
+  color: var(--ink);
+  font: inherit;
+  /* 16px or more: iPad Safari does not zoom in on the input. */
+  font-size: 1rem;
 }

@@ -149,7 +149,7 @@ export function attachCameraControls(
   };
 
   window.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || inTextField(e)) return;
     const dir = TURN_KEYS.get(e.key.toLowerCase());
     if (!dir) return;
     e.preventDefault();
@@ -164,6 +164,17 @@ export function attachCameraControls(
     },
     turn,
   };
+}
+
+/**
+ * True for a key in a text field, for example the dice input. There, Q, E
+ * and Esc are text keys, so the board does not act on them.
+ */
+export function inTextField(e: KeyboardEvent): boolean {
+  return (
+    e.target instanceof HTMLInputElement ||
+    e.target instanceof HTMLTextAreaElement
+  );
 }
 
 /**

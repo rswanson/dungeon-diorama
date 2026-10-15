@@ -1,8 +1,13 @@
+import type { Entry } from "../shared/dice.js";
 import { parsePositions, type Layout } from "../shared/positions.js";
 import type { Square } from "../shared/scene.js";
 
-// The positions API of the server. The browser sends the visitor cookie
-// (`dd_visitor`) with each call, as the calls go to the same origin.
+// The positions API and the rolls API of the server. The browser sends the
+// visitor cookie (`dd_visitor`) with each call, as the calls go to the same
+// origin.
+
+/** The error line of a roll that did not save: a 5xx, or no network. */
+export const ROLL_NOT_SAVED = "Roll not saved. Try again.";
 
 /**
  * How a save ends: it saved, or it did not. A 409 (another sprite stands
@@ -57,4 +62,40 @@ export async function savePosition(
   } catch {
     return { ok: false };
   }
+}
+
+/**
+ * Sends one line of the dice input. The server rolls and saves it. It gives
+ * the new entry, or the error to show under the input. It never throws.
+ */
+export async function sendRoll(
+  scene: string,
+  text: string,
+): Promise<{ ok: true; entry: Entry } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/scenes/${encodeURIComponent(scene)}/rolls`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      roll?: Entry;
+      error?: unknown;
+    };
+    if (res.status === 201 && body.roll) return { ok: true, entry: body.roll };
+    // A 4xx gives the message of the server, for example a bad dice term.
+    if (
+      res.status >= 400 &&
+      res.status < 500 &&
+      typeof body.error === "string"
+    ) {
+      return { ok: false, error: body.error };
+    }
+  } catch {
+    // No network: the same error as a 5xx.
+  }
+  return { ok: false, error: ROLL_NOT_SAVED };
 }

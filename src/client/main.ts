@@ -20,6 +20,7 @@ import { createBoardMesh } from "./board.js";
 import { BoardState } from "./board-state.js";
 import { BoardCamera } from "./camera.js";
 import { attachCameraControls } from "./controls.js";
+import { showDiceSidebar } from "./dice.js";
 import { SpriteDrag } from "./drag.js";
 import { showErrorPanel } from "./errors.js";
 import { SquareHighlight } from "./highlight.js";
@@ -197,6 +198,7 @@ function showBoard(
   window.addEventListener("resize", requestDraw);
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
+  showDiceSidebar(name);
 
   // A click shows the name of the sprite that the press grabbed.
   attachPointer(canvas, controls, drag, (grab) => {

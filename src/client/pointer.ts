@@ -1,4 +1,4 @@
-import { canvasPoint, type CameraControls } from "./controls.js";
+import { canvasPoint, inTextField, type CameraControls } from "./controls.js";
 import type { Point } from "./point.js";
 import { PressTracker, type PressEvent } from "./press.js";
 
@@ -90,7 +90,7 @@ export function attachPointer<T>(
   canvas.addEventListener("lostpointercapture", cancel);
 
   window.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
+    if (e.key !== "Escape" || inTextField(e)) return;
     const event = tracker.escape();
     if (event) e.preventDefault();
     run(event);
