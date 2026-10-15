@@ -1,21 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { parseEntries, parseInput, parseTerm, rollTerm } from "./dice.js";
 
-const BAD_DICE = (dice: string) =>
-  `\`${dice}\` is not valid dice. Use NdS±M, for example /roll 1d20+5.`;
-const BAD_NOTE_DICE = (part: string) =>
-  `\`${part}\` is not valid dice. Use NdS±M, for example [[1d20+5]].`;
+const BAD_DICE = (part: string, example = "/roll 1d20+5") =>
+  `\`${part}\` is not valid dice. Use NdS±M, for example ${example}.`;
+const BAD_NOTE_DICE = (part: string) => BAD_DICE(part, "[[1d20+5]]");
 const UNKNOWN = "Unknown command. Use /roll 1d20+5 or [[1d20+5]].";
 
 describe("parseInput", () => {
   it("reads /roll with one dice term in any case and with spaces", () => {
     expect(parseInput("  /roll 2d6+1  ")).toEqual({
       kind: "roll",
-      term: { dice: "2d6+1", count: 2, sides: 6, modifier: 1 },
+      parts: [{ term: { dice: "2d6+1", count: 2, sides: 6, modifier: 1 } }],
     });
     expect(parseInput("/ROLL 3D8 - 2")).toEqual({
       kind: "roll",
-      term: { dice: "3d8-2", count: 3, sides: 8, modifier: -2 },
+      parts: [{ term: { dice: "3d8-2", count: 3, sides: 8, modifier: -2 } }],
     });
   });
 
@@ -42,7 +41,7 @@ describe("parseInput", () => {
     expect(atLimit).toHaveLength(500);
     expect(parseInput(atLimit)).toEqual({
       kind: "roll",
-      term: { dice: "1d6", count: 1, sides: 6, modifier: 0 },
+      parts: [{ term: { dice: "1d6", count: 1, sides: 6, modifier: 0 } }],
     });
     expect(parseInput(`/roll ${"1".repeat(495)}`)).toEqual({
       kind: "error",

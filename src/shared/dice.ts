@@ -10,6 +10,7 @@ const MAX_SIDES = 100;
 const MAX_MODIFIER = 1000;
 /** The most `[[...]]` rolls in one note. */
 const MAX_NOTE_ROLLS = 10;
+const NOTE_EXAMPLE = "[[1d20+5]]";
 
 /** A dice term `NdS±M`, with `dice` in its normal form, for example `2d6+1`. */
 export interface DiceTerm {
@@ -40,12 +41,11 @@ export interface Entry {
 /** A part of a note before the roll: text, or the dice term of a `[[...]]`. */
 export type NotePart = { text: string } | { term: DiceTerm };
 
-/** What `parseInput` gives. */
+/** What `parseInput` gives. A `/roll` gives one part: its dice term. */
 export type ParsedInput =
   | { kind: "empty" }
   | { kind: "error"; error: string }
-  | { kind: "roll"; term: DiceTerm }
-  | { kind: "note"; parts: NotePart[] };
+  | { kind: "roll" | "note"; parts: NotePart[] };
 
 /** `[N]dS[±M]`, with spaces between the parts but not inside a number. */
 const TERM = /^(\d+)?\s*d\s*(\d+)\s*(?:([+-])\s*(\d+))?$/i;
@@ -98,11 +98,9 @@ export function parseInput(input: string): ParsedInput {
     if (dice === "") return error("Give the dice, for example /roll 1d20+5.");
     const term = parseTerm(dice);
     if (!term) {
-      return error(
-        `\`${dice}\` is not valid dice. Use NdS±M, for example /roll 1d20+5.`,
-      );
+      return badDice(dice, "/roll 1d20+5");
     }
-    return { kind: "roll", term };
+    return { kind: "roll", parts: [{ term }] };
   }
   if (text.startsWith("/")) {
     return error("Unknown command. Use /roll 1d20+5 or [[1d20+5]].");
@@ -127,13 +125,12 @@ function parseNote(text: string): ParsedInput {
     const open = text.indexOf("[[", at);
     if (open < 0) break;
     const close = text.indexOf("]]", open + 2);
-    if (close < 0) return badNoteDice(text.slice(open));
+    if (close < 0) return badDice(text.slice(open), NOTE_EXAMPLE);
     const dice = text.slice(open + 2, close).trim();
-    if (dice === "") return badNoteDice(text.slice(open, close + 2));
+    if (dice === "") return badDice(text.slice(open, close + 2), NOTE_EXAMPLE);
     const term = parseTerm(dice);
-    if (!term) return badNoteDice(dice);
-    rolls += 1;
-    if (rolls > MAX_NOTE_ROLLS) {
+    if (!term) return badDice(dice, NOTE_EXAMPLE);
+    if (++rolls > MAX_NOTE_ROLLS) {
       return error(
         `Use at most ${MAX_NOTE_ROLLS} [[...]] rolls in one message.`,
       );
@@ -146,9 +143,9 @@ function parseNote(text: string): ParsedInput {
   return { kind: "note", parts };
 }
 
-function badNoteDice(part: string): ParsedInput {
+function badDice(part: string, example: string): ParsedInput {
   return error(
-    `\`${part}\` is not valid dice. Use NdS±M, for example [[1d20+5]].`,
+    `\`${part}\` is not valid dice. Use NdS±M, for example ${example}.`,
   );
 }
 
