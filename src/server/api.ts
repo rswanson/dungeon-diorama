@@ -40,7 +40,7 @@ export function parseMove(body: unknown): At | null {
  * Reads the body of a roll: `{"text": "..."}`. It gives the text, or null for
  * any other body.
  */
-export function parseRollBody(body: unknown): string | null {
+function parseRollBody(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
   const text = (body as { text?: unknown }).text;
   return typeof text === "string" ? text : null;
