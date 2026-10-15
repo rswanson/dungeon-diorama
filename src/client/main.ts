@@ -31,6 +31,7 @@ import { loadSpriteVoxels } from "./images.js";
 import { BoardLabel } from "./label.js";
 import { showNotice } from "./notice.js";
 import { PathLine } from "./pathline.js";
+import { MAX_PIXEL_RATIO } from "./pixel-ratio.js";
 import { attachPointer } from "./pointer.js";
 import { MAX_HEIGHT, SpriteLayer, VOXEL } from "./sprites.js";
 import "./style.css";
@@ -38,7 +39,6 @@ import "./style.css";
 const DUNGEON = new Color("#14110f");
 /** The space between the top of a sprite's head and its label, in board units. */
 const LABEL_GAP = 0.15;
-const MAX_PIXEL_RATIO = 2;
 /** The sun is high on the -x side, so a step casts its shadow to +x. */
 const SUN_DIRECTION = new Vector3(-0.55, 1, 0.3).normalize();
 const SHADOW_MAP_SIZE = 2048;
@@ -143,15 +143,23 @@ function showBoard(
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
 
-  let size = "";
+  // The canvas is the board area: the window, or the part left of the open
+  // dice sidebar (style.css). The observer below keeps its size, so a draw
+  // does not read the layout. The first read is below, after the sidebar opens.
+  let width = 0;
+  let height = 0;
+  /** The size and the pixel ratio of the last resize of the buffer. */
+  let drawn = { width: 0, height: 0, ratio: 0 };
+  const pixelRatio = () => Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+
   function draw(): void {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    // Browser zoom or a move to another display changes the ratio.
-    const ratio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
-    const key = `${width}x${height}@${ratio}`;
-    if (key !== size) {
-      size = key;
+    const ratio = pixelRatio();
+    if (
+      width !== drawn.width ||
+      height !== drawn.height ||
+      ratio !== drawn.ratio
+    ) {
+      drawn = { width, height, ratio };
       if (ratio !== renderer.getPixelRatio()) renderer.setPixelRatio(ratio);
       renderer.setSize(width, height, false);
       view.resize(width, height);
@@ -198,7 +206,20 @@ function showBoard(
     },
   });
 
-  window.addEventListener("resize", requestDraw);
+  // The observer takes the new size of the canvas and draws at once, before
+  // the browser paints, so no stale frame shows the old buffer stretched into
+  // the new box. It also runs after a window resize.
+  new ResizeObserver(([entry]) => {
+    if (entry) {
+      ({ width, height } = entry.contentRect);
+      draw();
+    }
+  }).observe(canvas);
+  // Browser zoom changes the pixel ratio, and may not change the CSS size of
+  // the canvas, so the observer does not see it.
+  window.addEventListener("resize", () => {
+    if (pixelRatio() !== drawn.ratio) requestDraw();
+  });
   const controls = attachCameraControls(canvas, view, requestDraw);
   showTurnButtons(controls.turn);
   showDiceSidebar(name, rolls);
@@ -214,6 +235,9 @@ function showBoard(
     requestDraw();
   });
 
+  // The sidebar is open now, so this is the size of the first paint.
+  width = canvas.clientWidth;
+  height = canvas.clientHeight;
   draw();
 
   // This visitor's positions, which the server merged with the scene file.

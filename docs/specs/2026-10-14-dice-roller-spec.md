@@ -138,7 +138,12 @@ CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)
 
 ### Layout
 
-- The sidebar is a parchment panel on the right of the window, 320px wide (at most the window width), over the board. It has the same parchment style as the notice and the labels.
+- The sidebar is a parchment panel on the right of the window, 320px wide (at most the window width). It has the same parchment style as the notice and the labels.
+- Board area (amended 2026-10-14):
+  - On a window 456px or wider, the open sidebar takes the right 320px, and the board fills the rest of the window. When the sidebar closes, the board fills the full window again.
+  - When the board area changes, the view keeps its zoom and its center. At the least zoom, the whole board fits the board area.
+  - On a window narrower than 456px, the board keeps the full window and the open sidebar covers it.
+  - A press, a drag, a pan and a zoom act on the square under the pointer at every board-area size.
 - From top to bottom: a heading `Dice`, the log (it scrolls), the error line, and the input.
 - The input has a placeholder: `/roll 1d20+5 or text with [[1d6]]`.
 - A button with the label `Dice` opens and closes the sidebar. It is at the top right of the window when the sidebar is closed, and in the sidebar's heading when it is open. It has `aria-expanded`.
@@ -244,3 +249,5 @@ CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)
 | D23 | Rate limit | None | User (confirmed default) |
 | D24 | Tests | Parser unit tests, API tests, one Playwright test | User (confirmed default) |
 | D25 | Is the count required, or is `d20` the same as `1d20`? (ledger 1) | Optional: `d20` is the same as `1d20` | User (changed the default) |
+| D26 | Board area when the sidebar is open (amendment, 2026-10-14) | The board fits the space left of the sidebar; the view keeps its zoom and center | User (asked for the fit; confirmed the default for zoom and center) |
+| D27 | Board area below 456px (amendment, 2026-10-14) | The board keeps the full window; the sidebar covers it | User (confirmed default) |

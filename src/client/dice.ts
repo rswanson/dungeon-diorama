@@ -57,7 +57,7 @@ export function showDiceSidebar(
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
     sidebar.classList.toggle("open", open);
-    // The turn buttons move left of the open sidebar (style.css).
+    // The board and the turn buttons move left of the open sidebar (style.css).
     document.body.classList.toggle("dice-open", open);
     toggle.setAttribute("aria-expanded", String(open));
     // A hidden panel cannot scroll, so the log scrolls when the panel shows.

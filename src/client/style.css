@@ -200,35 +200,40 @@ body {
   box-shadow: 0 8px 24px rgb(0 0 0 / 50%);
 }
 
-/* The turn buttons stay left of the open sidebar. */
-.dice-open .hud {
-  right: calc(var(--dice-width) + max(16px, env(safe-area-inset-right)));
-}
-
 /*
+ * The board area is the window less the open sidebar (`--board-inset`). The
+ * turn buttons and the notice stay in the board area.
+ *
  * The turn buttons need 104px (two 48px buttons and an 8px gap) to the left of
  * the sidebar, which is 320px wide, and 16px of space on each side:
- * 320 + 16 + 104 + 16 = 456px. On a window narrower than 456px, the sidebar
- * hides them.
+ * 320 + 16 + 104 + 16 = 456px. On a window narrower than 456px, the board
+ * keeps the full window, and the sidebar covers it and hides the buttons.
  */
-@media (max-width: 455px) {
+.dice-open {
+  --board-inset: var(--dice-width);
+}
+
+@media (width < 456px) {
+  .dice-open {
+    --board-inset: 0px;
+  }
+
   .dice-open .hud {
     display: none;
   }
 }
 
-/* The notice is centered in the board area, left of the open sidebar. */
-.dice-open .notice {
-  left: calc((100% - var(--dice-width)) / 2);
-  max-width: calc(100% - var(--dice-width) - 32px);
+.dice-open #scene {
+  width: calc(100% - var(--board-inset));
 }
 
-/* On a window this narrow, the sidebar covers most of the window. */
-@media (max-width: 455px) {
-  .dice-open .notice {
-    left: 50%;
-    max-width: calc(100% - 32px);
-  }
+.dice-open .hud {
+  right: calc(var(--board-inset) + max(16px, env(safe-area-inset-right)));
+}
+
+.dice-open .notice {
+  left: calc((100% - var(--board-inset)) / 2);
+  max-width: calc(100% - var(--board-inset) - 32px);
 }
 
 .dice-heading {

@@ -1,18 +1,20 @@
 import { Vector2, Vector3, type Object3D } from "three";
 import type { BoardCamera } from "./camera.js";
-import type { Point } from "./point.js";
+import type { Point, Size } from "./point.js";
 
 /** The space between the pointer and a label at the pointer, in CSS pixels, so a finger does not hide it. */
 const POINTER_GAP = 24;
 
-/** `value` in the range 0 to `max`, or 0 when `max` is below 0 (the window is smaller than the label). */
+/** `value` in the range 0 to `max`, or 0 when `max` is below 0 (the area is smaller than the label). */
 function clamp(value: number, max: number): number {
   return Math.max(0, Math.min(value, max));
 }
 
 /**
  * A small parchment label. It stands above an object on the board (`show`),
- * or near the pointer (`showAt`).
+ * or near the pointer (`showAt`). A label near the pointer stays in the board
+ * area, which starts at the top left of the window (the canvas) and has the
+ * size that the caller gives.
  */
 export class BoardLabel {
   private readonly element: HTMLElement;
@@ -48,19 +50,20 @@ export class BoardLabel {
     this.element.hidden = false;
   }
 
-  /** Shows `text` near the canvas point `at`. Call `moveTo` when the point moves. */
-  showAt(text: string, at: Point): void {
+  /** Shows `text` near the canvas point `at` in a board area of this size. Call `moveTo` when the point moves. */
+  showAt(text: string, at: Point, area: Size): void {
     this.setText(text);
     this.target = null;
     this.element.hidden = false;
-    this.moveTo(at);
+    this.moveTo(at, area);
   }
 
   /**
    * Puts a label from `showAt` above and to the right of the canvas point
-   * `at`, or to the left of it or below it where the window has no room.
+   * `at`, or to the left of it or below it where the board area (this size)
+   * has no room.
    */
-  moveTo(at: Point): void {
+  moveTo(at: Point, area: Size): void {
     if (this.element.hidden || this.target) return;
     // The size changes only with the text, so the label is measured once for each text.
     this.size ??= {
@@ -68,16 +71,16 @@ export class BoardLabel {
       height: this.element.offsetHeight,
     };
     const { width, height } = this.size;
-    const right = at.x + POINTER_GAP + width <= window.innerWidth;
+    const right = at.x + POINTER_GAP + width <= area.width;
     const above = at.y - POINTER_GAP - height >= 0;
-    // Then keeps the whole label in the window on all four sides.
+    // Then keeps the whole label in the area on all four sides.
     const x = clamp(
       right ? at.x + POINTER_GAP : at.x - POINTER_GAP - width,
-      window.innerWidth - width,
+      area.width - width,
     );
     const y = clamp(
       above ? at.y - POINTER_GAP - height : at.y + POINTER_GAP,
-      window.innerHeight - height,
+      area.height - height,
     );
     this.element.style.transform = `translate(${x}px, ${y}px)`;
   }

@@ -49,3 +49,18 @@ Each batch merges to `main` with CI green. Claude then deploys `main` through Ca
   6. The client puts all note text in the page as text: a note `<b>hi</b>` shows those characters, not bold text (unit tested or covered in the Playwright test).
 - **How to observe:** Open the Caster address and type `I swing [[1d20+5]] for [[1d8+3]]`, then `I open the door`. Tap a bold total.
 - **Touches:** `src/shared/dice.ts`, `src/client/dice.ts`, `src/client/style.css`, tests.
+
+## B4: Board fits the space left of the open sidebar
+
+Added on 2026-10-14 with the spec amendment D26 and D27.
+
+- **Status:** in-progress
+- **User-visible outcome:** When the dice sidebar opens on a window 456px or wider, the board moves and resizes into the space left of the sidebar, so the sidebar covers none of it. When the sidebar closes, the board fills the window again. The zoom and the center stay the same.
+- **Acceptance criteria:**
+  1. On a window 456px or wider, the canvas covers only the area left of the open sidebar (width = window width − 320px), and the full window when the sidebar is closed. The renderer and the camera use the canvas size, not the window size.
+  2. Each open or close of the sidebar redraws the view at the new size and keeps the camera's zoom and target. At the least zoom, the whole board is inside the board area (e2e: each board corner's screen point is inside the canvas box with the sidebar open).
+  3. On a window narrower than 456px, the canvas keeps the full window when the sidebar is open.
+  4. A press, a drag, a right-drag pan and a wheel zoom act on the square under the pointer with the sidebar open (the existing drag e2e tests run with the sidebar open at the default desktop size, and one drag check also runs with the sidebar closed).
+  5. A window resize with the sidebar open keeps the canvas left of the sidebar.
+- **How to observe:** Open the Caster address on a desktop window. Close and open the sidebar with the `Dice` button: the board moves and resizes, and no part of it is under the sidebar.
+- **Touches:** `src/client/main.ts`, `src/client/dice.ts`, `src/client/style.css`, possibly `src/client/pointer.ts`, `src/client/controls.ts` and `src/client/camera.ts`, `e2e/dice.spec.ts`, `e2e/drag.spec.ts`.

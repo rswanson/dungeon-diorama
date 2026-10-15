@@ -3,3 +3,9 @@ export interface Point {
   x: number;
   y: number;
 }
+
+/** A width and a height, in CSS pixels. */
+export interface Size {
+  width: number;
+  height: number;
+}
