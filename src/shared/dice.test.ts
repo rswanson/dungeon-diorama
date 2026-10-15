@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInput, parseTerm, rollTerm } from "./dice.js";
+import { parseEntries, parseInput, parseTerm, rollTerm } from "./dice.js";
 
 const BAD_DICE = (dice: string) =>
   `\`${dice}\` is not valid dice. Use NdS±M, for example /roll 1d20+5.`;
@@ -87,5 +87,36 @@ describe("rollTerm", () => {
       results: [4, 3],
       total: -3,
     });
+  });
+});
+
+describe("parseEntries", () => {
+  const roll = {
+    dice: "2d6+1",
+    count: 2,
+    sides: 6,
+    modifier: 1,
+    results: [3, 4],
+    total: 8,
+  };
+  const entry = {
+    id: 1,
+    kind: "roll",
+    at: "2026-10-14T12:00:00.000Z",
+    parts: [{ text: "a" }, { roll }],
+  };
+
+  it("gives a valid list as it is", () => {
+    expect(parseEntries([entry])).toEqual([entry]);
+    expect(parseEntries([])).toEqual([]);
+  });
+
+  it("gives null for a bad shape", () => {
+    expect(parseEntries(null)).toBeNull();
+    expect(parseEntries({})).toBeNull();
+    expect(parseEntries([{ ...entry, id: "1" }])).toBeNull();
+    expect(parseEntries([{ ...entry, kind: "other" }])).toBeNull();
+    expect(parseEntries([{ ...entry, parts: [{ roll: {} }] }])).toBeNull();
+    expect(parseEntries([{ ...entry, parts: [{ text: 5 }] }])).toBeNull();
   });
 });

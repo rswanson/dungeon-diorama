@@ -27,26 +27,39 @@ export function showDiceSidebar(
     throw new Error("The page has no dice sidebar.");
   }
 
+  const scrollToNewest = (): void => {
+    log.scrollTop = log.scrollHeight;
+  };
+  // The log items by entry id. The ids only increase.
+  const shown = new Map<number, HTMLLIElement>();
+  /** Adds the entries that the log does not show, in id order. */
+  const addEntries = (entries: Entry[]): void => {
+    for (const entry of entries) {
+      if (shown.has(entry.id)) continue;
+      const item = entryItem(entry);
+      const next = [...shown]
+        .filter(([id]) => id > entry.id)
+        .sort(([a], [b]) => a - b)[0];
+      log.insertBefore(item, next ? next[1] : null);
+      shown.set(entry.id, item);
+    }
+    scrollToNewest();
+  };
+
   const setOpen = (open: boolean): void => {
     panel.hidden = !open;
     sidebar.classList.toggle("open", open);
     // The turn buttons move left of the open sidebar (style.css).
     document.body.classList.toggle("dice-open", open);
     toggle.setAttribute("aria-expanded", String(open));
-    // A hidden panel cannot scroll, so the log shows its newest entry when
-    // the panel shows.
-    if (open) log.scrollTop = log.scrollHeight;
+    // A hidden panel cannot scroll, so the log scrolls when the panel shows.
+    if (open) scrollToNewest();
   };
   toggle.addEventListener("click", () =>
     setOpen(toggle.getAttribute("aria-expanded") !== "true"),
   );
   // A later resize does not open or close it.
   setOpen(window.matchMedia(OPEN_AT_START).matches);
-
-  const hasEntry = (id: number): boolean =>
-    [...log.children].some(
-      (item) => (item as HTMLElement).dataset.id === String(id),
-    );
 
   const send = async (): Promise<void> => {
     // The text that the person typed stays in the input. The request has the trimmed text.
@@ -66,9 +79,7 @@ export function showDiceSidebar(
         errorLine.textContent = result.error;
         return;
       }
-      // The load can show this entry first, when its answer comes before this one.
-      if (!hasEntry(result.entry.id)) log.append(entryItem(result.entry));
-      log.scrollTop = log.scrollHeight;
+      addEntries([result.entry]);
       input.value = "";
     } finally {
       input.readOnly = false;
@@ -84,30 +95,9 @@ export function showDiceSidebar(
 
   sidebar.hidden = false;
 
-  // An entry sent before the log loads stays at the bottom: the saved entries
-  // go above it, less the ones that it already shows. When the load answers
-  // first and includes the entry, the send does not add it again.
   void saved.then((entries) => {
-    if (!entries) {
-      showNotice("Saved rolls did not load");
-      return;
-    }
-    const shown = new Set(
-      [...log.children].map((item) => (item as HTMLElement).dataset.id),
-    );
-    let items: HTMLLIElement[];
-    try {
-      items = entries
-        .filter((entry) => !shown.has(String(entry.id)))
-        .map(entryItem);
-    } catch (error) {
-      // A bad entry counts as a failed load. The log stays as it was.
-      console.warn("The saved rolls have a wrong shape:", error);
-      showNotice("Saved rolls did not load");
-      return;
-    }
-    log.prepend(...items);
-    log.scrollTop = log.scrollHeight;
+    if (entries) addEntries(entries);
+    else showNotice("Saved rolls did not load");
   });
 }
 
@@ -115,7 +105,6 @@ export function showDiceSidebar(
 function entryItem(entry: Entry): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "dice-entry";
-  item.dataset.id = String(entry.id);
   const head = document.createElement("div");
   head.className = "dice-entry-head";
   const line = document.createElement("div");

@@ -1,4 +1,4 @@
-import type { Entry } from "../shared/dice.js";
+import { parseEntries, type Entry } from "../shared/dice.js";
 import { parsePositions, type Layout } from "../shared/positions.js";
 import type { Square } from "../shared/scene.js";
 
@@ -44,10 +44,9 @@ export async function loadRolls(scene: string): Promise<Entry[]> {
   });
   if (!res.ok) throw new Error(`The rolls answered ${res.status}.`);
   const body = (await res.json()) as { rolls?: unknown };
-  if (!Array.isArray(body.rolls)) {
-    throw new Error("The rolls have a wrong shape.");
-  }
-  return body.rolls as Entry[];
+  const rolls = parseEntries(body.rolls);
+  if (!rolls) throw new Error("The rolls have a wrong shape.");
+  return rolls;
 }
 
 /** Saves the move of sprite `id` in `scene` to `to`. It never throws. */

@@ -115,3 +115,45 @@ export function rollTerm(term: DiceTerm, die: (sides: number) => number): Roll {
   const total = results.reduce((sum, n) => sum + n, term.modifier);
   return { ...term, results, total };
 }
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRoll(value: unknown): value is Roll {
+  return (
+    isObject(value) &&
+    typeof value.dice === "string" &&
+    typeof value.count === "number" &&
+    typeof value.sides === "number" &&
+    typeof value.modifier === "number" &&
+    typeof value.total === "number" &&
+    Array.isArray(value.results) &&
+    value.results.every((n) => typeof n === "number")
+  );
+}
+
+function isPart(value: unknown): value is Part {
+  return (
+    isObject(value) && (typeof value.text === "string" || isRoll(value.roll))
+  );
+}
+
+function isEntry(value: unknown): value is Entry {
+  return (
+    isObject(value) &&
+    typeof value.id === "number" &&
+    (value.kind === "roll" || value.kind === "note") &&
+    typeof value.at === "string" &&
+    Array.isArray(value.parts) &&
+    value.parts.every(isPart)
+  );
+}
+
+/**
+ * Reads the `rolls` of the API's answer: an array of entries. It gives null
+ * when the shape is wrong.
+ */
+export function parseEntries(data: unknown): Entry[] | null {
+  return Array.isArray(data) && data.every(isEntry) ? data : null;
+}
