@@ -80,6 +80,36 @@ test("/roll 2d6+1 adds an entry with each die, the modifier and the total", asyn
   await expect.poll(() => scrolledToEnd(page)).toBe(true);
 });
 
+test("an entry that the load shows first is not added again by the send", async ({
+  page,
+}) => {
+  const { input, entries } = sidebar(page);
+  let load: Route | undefined;
+  let send: Route | undefined;
+  let saved: Awaited<ReturnType<Route["fetch"]>> | undefined;
+  await page.route(ROLLS, async (route) => {
+    if (route.request().method() === "GET") {
+      load = route;
+      return;
+    }
+    // The server saves the entry now. The answer to the browser waits.
+    send = route;
+    saved = await route.fetch();
+  });
+  await page.reload();
+  await ready(page);
+  await expect.poll(() => load).toBeDefined();
+  await input.fill("/roll 1d4");
+  await input.press("Enter");
+  await expect.poll(() => saved).toBeDefined();
+  // The load answers first, with the new row.
+  await load!.continue();
+  await expect(entries).toHaveCount(1);
+  await send!.fulfill({ response: saved! });
+  await expect(input).toHaveValue("");
+  await expect(entries).toHaveCount(1);
+});
+
 test("when the saved rolls do not load, the log is empty, a notice shows, and a roll still works", async ({
   page,
 }) => {

@@ -43,6 +43,11 @@ export function showDiceSidebar(
   // A later resize does not open or close it.
   setOpen(window.matchMedia(OPEN_AT_START).matches);
 
+  const hasEntry = (id: number): boolean =>
+    [...log.children].some(
+      (item) => (item as HTMLElement).dataset.id === String(id),
+    );
+
   const send = async (): Promise<void> => {
     // The text that the person typed stays in the input. The request has the trimmed text.
     const text = input.value.trim();
@@ -61,7 +66,8 @@ export function showDiceSidebar(
         errorLine.textContent = result.error;
         return;
       }
-      log.append(entryItem(result.entry));
+      // The load can show this entry first, when its answer comes before this one.
+      if (!hasEntry(result.entry.id)) log.append(entryItem(result.entry));
       log.scrollTop = log.scrollHeight;
       input.value = "";
     } finally {
@@ -79,7 +85,8 @@ export function showDiceSidebar(
   sidebar.hidden = false;
 
   // An entry sent before the log loads stays at the bottom: the saved entries
-  // go above it, less the ones that it already shows.
+  // go above it, less the ones that it already shows. When the load answers
+  // first and includes the entry, the send does not add it again.
   void saved.then((entries) => {
     if (!entries) {
       showNotice("Saved rolls did not load");
