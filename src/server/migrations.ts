@@ -18,4 +18,17 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
       PRIMARY KEY (visitor_id, scene, sprite_id)
     )`,
   },
+  {
+    name: "002_dice_rolls",
+    // Each entry of the dice log of a visitor in a scene. Nothing deletes rows.
+    sql: `CREATE TABLE dice_rolls (
+      id         bigserial   PRIMARY KEY,
+      visitor_id uuid        NOT NULL,
+      scene      text        NOT NULL,
+      kind       text        NOT NULL CHECK (kind IN ('roll', 'note')),
+      parts      jsonb       NOT NULL,
+      rolled_at  timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX dice_rolls_visitor_scene ON dice_rolls (visitor_id, scene, id DESC)`,
+  },
 ];
