@@ -1,4 +1,5 @@
 import { expect, type Page, type Route } from "@playwright/test";
+import { parseTerm, rollTerm } from "../src/shared/dice.js";
 import { hook, ready, test } from "./fixtures.js";
 
 const ROLLS = "**/api/scenes/*/rolls";
@@ -58,7 +59,7 @@ test("/roll 2d6+1 adds an entry with each die, the modifier and the total", asyn
   expect(await scrolledToEnd(page)).toBe(true);
 });
 
-test("a note shows its text as text and each [[...]] total in bold, and a hover or a press on a total shows its dice", async ({
+test("a note shows its text as text and each [[...]] as a bold total that shows its dice on hover", async ({
   page,
 }) => {
   const { input, entries, error } = sidebar(page);
@@ -99,23 +100,15 @@ test("a note shows its text as text and each [[...]] total in bold, and a hover 
     "I open the door",
   );
   await expect(entries.nth(1).locator(".dice-total")).toHaveCount(0);
+});
 
-  // A press shows the dice, with the same green and red dice as a roll entry,
-  // until a second press. The server gives fixed dice here.
-  const roll = (
-    dice: string,
-    sides: number,
-    modifier: number,
-    die: number,
-  ) => ({
-    roll: {
-      dice,
-      count: 1,
-      sides,
-      modifier,
-      results: [die],
-      total: die + modifier,
-    },
+test("a press on a total shows its dice until a second press, with the green and red dice of a roll entry", async ({
+  page,
+}) => {
+  const { input, entries } = sidebar(page);
+  // The server gives fixed dice here.
+  const roll = (dice: string, die: number) => ({
+    roll: rollTerm(parseTerm(dice)!, () => die),
   });
   await page.route(ROLLS, (route) =>
     route.fulfill({
@@ -125,34 +118,28 @@ test("a note shows its text as text and each [[...]] total in bold, and a hover 
           id: Number.MAX_SAFE_INTEGER,
           kind: "note",
           at: new Date().toISOString(),
-          parts: [
-            roll("1d20+5", 20, 5, 20),
-            { text: " then " },
-            roll("1d8+3", 8, 3, 1),
-          ],
+          parts: [roll("1d20+5", 20), { text: " then " }, roll("1d8+3", 1)],
         },
       },
     }),
   );
   await input.fill("[[1d20+5]] then [[1d8+3]]");
   await input.press("Enter");
-  await expect(entries).toHaveCount(3);
-  const fixed = entries.nth(2);
-  const [high, low] = [0, 1].map((i) => fixed.locator(".dice-total").nth(i));
-  const [highDetail, lowDetail] = [0, 1].map((i) =>
-    fixed.locator(".dice-detail").nth(i),
-  );
-  await high.click();
+  await expect(entries).toHaveCount(1);
+  const fixed = entries.first();
+  const totals = fixed.locator(".dice-total");
+  const details = fixed.locator(".dice-detail");
+  await totals.nth(0).click();
   await page.mouse.move(10, 10);
-  await expect(highDetail).toHaveText("1d20+5: (20) + 5 = 25");
-  await expect(highDetail.locator(".die-max")).toHaveText("20");
-  await expect(high).toHaveAttribute("aria-expanded", "true");
-  await high.click();
+  await expect(details.nth(0)).toHaveText("1d20+5: (20) + 5 = 25");
+  await expect(details.nth(0).locator(".die-max")).toHaveText("20");
+  await expect(totals.nth(0)).toHaveAttribute("aria-expanded", "true");
+  await totals.nth(0).click();
   await page.mouse.move(10, 10);
-  await expect(highDetail).toBeHidden();
-  await low.click();
-  await expect(lowDetail).toHaveText("1d8+3: (1) + 3 = 4");
-  await expect(lowDetail.locator(".die-min")).toHaveText("1");
+  await expect(details.nth(0)).toBeHidden();
+  await totals.nth(1).click();
+  await expect(details.nth(1)).toHaveText("1d8+3: (1) + 3 = 4");
+  await expect(details.nth(1).locator(".die-min")).toHaveText("1");
 });
 
 test("after a reload, the saved log shows oldest first and scrolled to the newest, and an entry sent during the load stays at the bottom, once", async ({
