@@ -50,8 +50,8 @@ export function showDiceSidebar(
   log.addEventListener("click", (e) => {
     const total = (e.target as Element).closest(".dice-total");
     if (!total) return;
-    const shown = total.getAttribute("aria-expanded") === "true";
-    total.setAttribute("aria-expanded", String(!shown));
+    const expanded = total.getAttribute("aria-expanded") === "true";
+    total.setAttribute("aria-expanded", String(!expanded));
   });
 
   const setOpen = (open: boolean): void => {
